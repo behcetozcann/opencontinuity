@@ -76,3 +76,25 @@ pub async fn check_update(app: AppHandle) {
 pub async fn install_update(app: AppHandle) -> Result<(), String> {
     updater::install(&app).await
 }
+
+/// macOS Sistem Ayarları → Gizlilik ve Güvenlik → Yerel Ağ.
+#[tauri::command]
+pub fn open_local_network_settings() -> Result<(), String> {
+    open_external("x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")
+}
+
+#[tauri::command]
+pub fn open_project_page() -> Result<(), String> {
+    open_external("https://github.com/behcetozcann/opencontinuity")
+}
+
+/// Yalnız bu dosyadaki sabit adresler açılır; arayüzden adres alınmaz.
+fn open_external(target: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(target).spawn();
+    #[cfg(windows)]
+    let result = std::process::Command::new("explorer").arg(target).spawn();
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let result = std::process::Command::new("xdg-open").arg(target).spawn();
+    result.map(|_| ()).map_err(|error| format!("açılamadı: {error}"))
+}

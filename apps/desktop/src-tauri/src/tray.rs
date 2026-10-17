@@ -1,10 +1,16 @@
 //! Menü çubuğu (macOS) / sistem tepsisi (Windows) simgesi ve menüsü.
+//!
+//! Menü: durum satırı · ✓ Pano paylaşımı · (güncelleme varsa) Güncelle ·
+//! OpenContinuity'yi aç · Ayarlar… · Çık. Güncelleme öğesi yalnız gerektiğinde
+//! görünsün diye menü o durum değişince yeniden kurulur.
+
+use std::sync::Mutex;
 
 use oc_engine::Command;
 use tauri::image::Image;
-use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, Wry};
+use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::updater::{self, UpdateStatus};
 use crate::{AppState, View, show_window};
@@ -13,9 +19,13 @@ const TRAY_ID: &str = "main";
 
 struct TrayItems {
     status: MenuItem<Wry>,
-    pause: MenuItem<Wry>,
-    update: MenuItem<Wry>,
+    sharing: CheckMenuItem<Wry>,
+    /// Menüde güncelleme öğesi varsa metni.
+    update_label: Option<String>,
 }
+
+#[derive(Default)]
+struct TrayState(Mutex<Option<TrayItems>>);
 
 #[derive(Clone, Copy)]
 enum Look {
@@ -25,15 +35,8 @@ enum Look {
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let status = MenuItem::with_id(app, "status", "Başlatılıyor…", false, None::<&str>)?;
-    let pause = MenuItem::with_id(app, "pause", "Duraklat", true, None::<&str>)?;
-    let open = MenuItem::with_id(app, "open", "OpenContinuity'yi aç", true, None::<&str>)?;
-    let update = MenuItem::with_id(app, "update", "Güncellemeleri denetle", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Çık", true, None::<&str>)?;
-    let menu = Menu::with_items(
-        app,
-        &[&status, &PredefinedMenuItem::separator(app)?, &pause, &open, &update, &PredefinedMenuItem::separator(app)?, &quit],
-    )?;
+    app.manage(TrayState::default());
+    let menu = build_menu(app, None)?;
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon(Look::Waiting))
         .icon_as_template(cfg!(target_os = "macos"))
@@ -50,47 +53,78 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
-    app.manage(TrayItems { status, pause, update });
     Ok(())
 }
 
+fn build_menu(app: &AppHandle, update_label: Option<String>) -> tauri::Result<Menu<Wry>> {
+    let status = MenuItem::with_id(app, "status", "Başlatılıyor…", false, None::<&str>)?;
+    let sharing = CheckMenuItem::with_id(app, "sharing", "Pano paylaşımı", true, true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "OpenContinuity'yi aç", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Ayarlar…", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Çık", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &sharing])?;
+    if let Some(label) = &update_label {
+        menu.append(&MenuItem::with_id(app, "update", label, true, None::<&str>)?)?;
+    }
+    menu.append_items(&[&PredefinedMenuItem::separator(app)?, &open, &settings, &PredefinedMenuItem::separator(app)?, &quit])?;
+    *app.state::<TrayState>().0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) =
+        Some(TrayItems { status, sharing, update_label });
+    Ok(menu)
+}
+
 pub fn refresh(app: &AppHandle, view: &View) {
-    let items = app.state::<TrayItems>();
-    let _ = items.status.set_text(status_text(view));
-    let _ = items.pause.set_text(if view.snapshot.paused { "Devam et" } else { "Duraklat" });
-    let _ = items.pause.set_enabled(view.snapshot.peer.is_some());
-    let (update_text, update_enabled) = match &view.update {
-        UpdateStatus::Available { version, .. } => (format!("v{version} sürümünü kur"), true),
-        UpdateStatus::Checking => ("Güncelleme denetleniyor…".to_owned(), false),
-        UpdateStatus::Downloading { percent: Some(percent), .. } => (format!("Güncelleme indiriliyor… %{percent}"), false),
-        UpdateStatus::Downloading { .. } | UpdateStatus::Installing { .. } => ("Güncelleniyor…".to_owned(), false),
-        UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Failed { .. } => ("Güncellemeleri denetle".to_owned(), true),
-    };
-    let _ = items.update.set_text(update_text);
-    let _ = items.update.set_enabled(update_enabled);
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        set_look(&tray, look(view));
-        let _ = tray.set_tooltip(Some(format!("OpenContinuity — {}", status_text(view))));
+    let Some(tray) = app.tray_by_id(TRAY_ID) else { return };
+    let wanted_update = update_label(&view.update);
+    let current_update = app
+        .state::<TrayState>()
+        .0
+        .lock()
+        .ok()
+        .and_then(|items| items.as_ref().map(|items| items.update_label.clone()));
+    if current_update != Some(wanted_update.clone())
+        && let Ok(menu) = build_menu(app, wanted_update)
+    {
+        let _ = tray.set_menu(Some(menu));
+    }
+    if let Ok(items) = app.state::<TrayState>().0.lock()
+        && let Some(items) = items.as_ref()
+    {
+        let _ = items.status.set_text(status_text(view));
+        let _ = items.sharing.set_checked(!view.snapshot.paused);
+        let _ = items.sharing.set_enabled(view.snapshot.peer.is_some());
+    }
+    set_look(&tray, look(view));
+    let _ = tray.set_tooltip(Some(format!("OpenContinuity — {}", status_text(view))));
+}
+
+fn update_label(status: &UpdateStatus) -> Option<String> {
+    match status {
+        UpdateStatus::Available { version, .. } => Some(format!("v{version} güncellemesini kur")),
+        UpdateStatus::Downloading { percent: Some(percent), .. } => Some(format!("Güncelleme indiriliyor… %{percent}")),
+        UpdateStatus::Downloading { .. } | UpdateStatus::Installing { .. } => Some("Güncelleniyor…".into()),
+        _ => None,
     }
 }
 
 fn on_menu(app: &AppHandle, event: MenuEvent) {
     let state = app.state::<AppState>();
     match event.id().as_ref() {
-        "pause" => {
+        "sharing" => {
             let paused = state.view.lock().map(|view| view.snapshot.paused).unwrap_or(false);
             state.engine().send(if paused { Command::Resume } else { Command::Pause });
         }
-        "open" => show_window(app),
         "update" => {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if matches!(updater::current(&app), UpdateStatus::Available { .. }) {
+            if matches!(updater::current(app), UpdateStatus::Available { .. }) {
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
                     let _ = updater::install(&app).await;
-                } else {
-                    updater::check(&app).await;
-                }
-            });
+                });
+            }
+        }
+        "open" => show_window(app),
+        "settings" => {
+            show_window(app);
+            let _ = app.emit("open-settings", ());
         }
         "quit" => {
             state.engine().send(Command::Shutdown);
@@ -103,7 +137,7 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
 fn status_text(view: &View) -> String {
     let snapshot = &view.snapshot;
     if view.engine_error.is_some() {
-        return "Durdu — ayrıntı için pencereyi açın".into();
+        return "Çalışmıyor — ayrıntı için açın".into();
     }
     if snapshot.pairing.is_some() {
         return "Eşleştiriliyor…".into();
@@ -112,11 +146,11 @@ fn status_text(view: &View) -> String {
         return "Eşleşmiş cihaz yok".into();
     };
     if snapshot.paused {
-        format!("Duraklatıldı ({})", peer.name)
+        format!("Duraklatıldı · {}", peer.name)
     } else if snapshot.connected_ip.is_some() {
-        format!("Bağlı: {}", peer.name)
+        format!("Bağlı · {}", peer.name)
     } else {
-        format!("Bekleniyor: {}", peer.name)
+        format!("Bağlantı bekleniyor · {}", peer.name)
     }
 }
 

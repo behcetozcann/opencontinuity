@@ -24,6 +24,7 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
     context.events.update(|snapshot| {
         snapshot.peer = Some(summary);
         snapshot.connected_ip = None;
+        snapshot.link_error = None;
     });
     let listener = TcpListener::bind(("0.0.0.0", port)).await.with_context(|| {
         format!("port {port} başka bir program tarafından kullanılıyor (açık kalmış bir `oc run` ya da ikinci OpenContinuity olabilir)")
@@ -90,6 +91,7 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
                     }
                     Err(failures) => {
                         context.events.diagnostic(format!("Bağlanılamadı: {failures}"));
+                        context.events.update(|snapshot| snapshot.link_error = Some(failures));
                         retry.failed();
                     }
                 }
@@ -178,6 +180,7 @@ async fn activate(
     context.events.update(|snapshot| {
         snapshot.peer = Some(summary);
         snapshot.connected_ip = Some(address.ip().to_string());
+        snapshot.link_error = None;
     });
     Ok(Some(link))
 }

@@ -4,154 +4,170 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OpenContinuity</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
 </head>
 <body>
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="status" class="active">Durum</button>
-    <button role="tab" data-tab="devices">Cihazlar</button>
-    <button role="tab" data-tab="settings">Ayarlar</button>
-    <button role="tab" data-tab="about">Hakkında</button>
-  </nav>
+  <div class="titlebar" data-tauri-drag-region></div>
 
-  <div id="engine-error" class="banner error" hidden>
-    <p id="engine-error-text"></p>
-    <div class="row">
-      <button id="engine-retry" class="secondary">Yeniden dene</button>
-      <button id="engine-log" class="secondary">Kaydı gönder</button>
-    </div>
-  </div>
-
-  <section id="tab-status" class="tab">
-    <div class="card status-card">
-      <span id="status-dot" class="dot"></span>
-      <div>
-        <h1 id="status-title">Başlatılıyor…</h1>
-        <p id="status-detail" class="muted"></p>
+  <main id="app" hidden>
+    <!-- Kurulum sihirbazı: eşleşmiş cihaz yokken -->
+    <section id="onboarding" class="screen" hidden>
+      <div class="step" id="ob-welcome">
+        <div class="devices" id="ob-devices"></div>
+        <h1>Mac ile Windows arasında kopyala, yapıştır</h1>
+        <p class="lead">İki bilgisayarı bir kez eşleştirin. Sonra her zamanki gibi <kbd>⌘C</kbd> / <kbd>Ctrl+V</kbd>.</p>
+        <div class="notice-slot" id="ob-notice"></div>
+        <button class="btn primary large" id="ob-start">Eşleştirmeye başla</button>
+        <p class="hint">Diğer bilgisayarda da OpenContinuity açık olmalı ve iki bilgisayar aynı ağda olmalı.</p>
       </div>
-    </div>
-    <div id="update-card" class="card" hidden>
-      <h2 id="update-title"></h2>
-      <p id="update-detail" class="muted"></p>
-      <div id="update-progress" class="progress" hidden><div id="update-bar"></div></div>
-      <button id="update-install" class="primary wide">Güncelle ve yeniden başlat</button>
-    </div>
-    <div class="card">
-      <h2>Son aktarım</h2>
-      <p id="last-transfer" class="muted">Henüz aktarım yok.</p>
-    </div>
-    <button id="status-pause" class="secondary wide" hidden>Duraklat</button>
-    <button id="status-pair" class="primary wide" hidden>Bir cihazla eşleştir</button>
-  </section>
 
-  <section id="tab-devices" class="tab" hidden>
-    <div id="peer-card" class="card" hidden>
-      <h2>Eşleşmiş cihaz</h2>
-      <p class="peer-name" id="peer-name"></p>
-      <dl class="facts">
-        <dt>Parmak izi</dt><dd id="peer-fingerprint" class="mono"></dd>
-        <dt>Son adres</dt><dd id="peer-address" class="mono"></dd>
-      </dl>
-      <div id="unpair-ask">
-        <button id="unpair" class="danger">Eşleşmeyi kaldır</button>
+      <div class="step" id="ob-searching">
+        <div class="radar"><span></span><span></span><span></span><i data-icon="self"></i></div>
+        <h1>Diğer bilgisayar aranıyor</h1>
+        <p class="lead">Diğer bilgisayarda OpenContinuity'yi açıp <b>Eşleştirmeye başla</b>'ya basın.</p>
+        <div class="self-card">
+          <span class="muted">Bu bilgisayar</span>
+          <b id="ob-self-name"></b>
+          <span class="mono" id="ob-self-ip"></span>
+        </div>
+        <form class="manual" id="ob-manual">
+          <label for="ob-address">Bulunamıyor mu? Diğer bilgisayarın adresiyle bağlanın:</label>
+          <div class="row">
+            <input id="ob-address" placeholder="192.168.1.20" autocomplete="off" spellcheck="false" inputmode="decimal">
+            <button class="btn secondary" type="submit">Bağlan</button>
+          </div>
+        </form>
+        <button class="btn ghost" id="ob-cancel">Vazgeç</button>
       </div>
-      <div id="unpair-confirm" hidden>
-        <p>Bu cihazla pano paylaşımı durur. Karşı cihazda da eşleşmeyi kaldırmanız gerekir.</p>
+
+      <div class="step" id="ob-confirm">
+        <div class="pair-names">
+          <span><i data-icon="self"></i><b id="ob-confirm-self"></b></span>
+          <span><i data-icon="peer"></i><b id="ob-confirm-peer"></b></span>
+        </div>
+        <h1>Kodlar aynı mı?</h1>
+        <p class="lead">İki ekranda da aynı 6 haneli kod görünmeli.</p>
+        <div class="code" id="ob-code"></div>
         <div class="row">
-          <button id="unpair-yes" class="danger">Kaldır</button>
-          <button id="unpair-no" class="secondary">Vazgeç</button>
+          <button class="btn secondary" id="ob-no">Farklı</button>
+          <button class="btn primary" id="ob-yes">Kodlar aynı</button>
         </div>
+        <p class="hint">Kodlar farklıysa araya başka bir cihaz girmiş olabilir; <b>Farklı</b>'ya basın.</p>
       </div>
-    </div>
 
-    <div id="pairing" class="card" hidden>
-      <div id="pair-idle">
-        <h2>Cihaz eşleştir</h2>
-        <p>Diğer bilgisayarda da OpenContinuity'yi açıp <b>Eşleştir</b>'e basın. İki cihaz aynı ağda olmalı.</p>
-        <p id="pair-error" class="banner error" hidden></p>
-        <button id="pair-start" class="primary wide">Eşleştir</button>
+      <div class="step" id="ob-waiting">
+        <div class="spinner large"></div>
+        <h1>Onay bekleniyor</h1>
+        <p class="lead"><b id="ob-waiting-peer"></b> üzerinde de <b>Kodlar aynı</b>'ya basın.</p>
+        <button class="btn ghost" id="ob-waiting-cancel">Vazgeç</button>
       </div>
-      <div id="pair-searching" hidden>
-        <h2><span class="spinner"></span>Aranıyor…</h2>
-        <p>Aynı ağda eşleştirme bekleyen bilgisayar aranıyor. Diğer bilgisayarda da <b>Eşleştir</b>'e basın.</p>
-        <p class="muted">Bu bilgisayarın adresi: <span id="own-ip" class="mono">—</span></p>
-        <div id="manual" hidden>
-          <p>Bulunamıyor mu? Diğer bilgisayarın adresini yazın:</p>
-          <form id="manual-form" class="row">
-            <input id="manual-address" placeholder="192.168.1.82" autocomplete="off" spellcheck="false">
-            <button type="submit" class="secondary">Bağlan</button>
-          </form>
-        </div>
-        <button id="pair-cancel" class="secondary wide">Vazgeç</button>
-      </div>
-      <div id="pair-confirm" hidden>
-        <h2>Kodlar aynı mı?</h2>
-        <p><b id="confirm-peer"></b> bulundu. İki ekranda da aynı kod görünmeli:</p>
-        <p id="code" class="code"></p>
-        <div class="row">
-          <button id="code-yes" class="primary">Evet, aynı</button>
-          <button id="code-no" class="secondary">Hayır</button>
-        </div>
-      </div>
-      <div id="pair-waiting" hidden>
-        <h2><span class="spinner"></span>Onay bekleniyor</h2>
-        <p><b id="waiting-peer"></b> üzerinde de kodun onaylanması bekleniyor.</p>
-        <button id="waiting-cancel" class="secondary wide">Vazgeç</button>
-      </div>
-    </div>
-  </section>
 
-  <section id="tab-settings" class="tab" hidden>
-    <div class="card">
-      <label class="toggle">
-        <input type="checkbox" id="autostart">
-        <span>Bilgisayar açılınca başlat</span>
+      <div class="step" id="ob-done">
+        <div class="success"><i data-icon="check"></i></div>
+        <h1>Hazır</h1>
+        <p class="lead">Artık bir bilgisayarda kopyaladığınız metni diğerinde yapıştırabilirsiniz.</p>
+      </div>
+    </section>
+
+    <!-- Ana ekran -->
+    <section id="home" class="screen" hidden>
+      <div class="devices" id="home-devices"></div>
+      <div class="status">
+        <h1 id="home-title"></h1>
+        <p class="lead" id="home-detail"></p>
+      </div>
+      <div class="notice-slot" id="home-notice"></div>
+      <label class="card toggle-card">
+        <span>
+          <b>Pano paylaşımı</b>
+          <small id="sharing-sub"></small>
+        </span>
+        <input type="checkbox" class="switch" id="sharing">
       </label>
-      <p id="autostart-error" class="banner error" hidden></p>
-      <label class="toggle">
-        <input type="checkbox" id="paused">
-        <span>Pano paylaşımını duraklat</span>
-      </label>
-      <p class="muted">Duraklatıldığında kopyaladıklarınız gönderilmez, karşıdan gelenler panoya yazılmaz.</p>
-    </div>
-    <div class="card">
-      <h2>Güncellemeler</h2>
-      <p id="update-summary" class="muted">Henüz denetlenmedi.</p>
-      <button id="update-check" class="secondary wide">Şimdi denetle</button>
-    </div>
-  </section>
-
-  <section id="tab-about" class="tab" hidden>
-    <div class="card">
-      <h2>OpenContinuity <span id="version" class="muted"></span></h2>
-      <p>Mac ve Windows arasında, yalnız yerel ağ üzerinden, şifreli pano paylaşımı. Bulut ya da hesap yok.</p>
-      <dl class="facts">
-        <dt>Bu cihaz</dt><dd id="own-name"></dd>
-        <dt>Parmak izi</dt><dd id="own-fingerprint" class="mono"></dd>
-      </dl>
-    </div>
-    <div class="card">
-      <h2>Gizlilik</h2>
-      <ul>
-        <li>Pano içeriği hiçbir kayda yazılmaz; yalnız boyut tutulur.</li>
-        <li>Parola yöneticilerinin gizli işaretli kopyaları hiç gönderilmez.</li>
-        <li>Karşı cihaz kapalıyken kopyalananlar biriktirilmez.</li>
-        <li>Parola, kod ya da hasta bilgisi kopyalayacaksanız paylaşımı duraklatabilirsiniz.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h2>Teşhis kaydı</h2>
-      <p class="muted">Sorun bildirirken bu kaydı gönderin. Pano içeriği yer almaz; cihaz adları, IP adresleri ve aktarım boyutları bulunur.</p>
-      <pre id="log" class="log">Yükleniyor…</pre>
-      <div class="row">
-        <button id="log-copy" class="secondary">Kopyala</button>
-        <button id="log-save" class="secondary">Masaüstüne kaydet</button>
-        <button id="log-reveal" class="secondary">Klasörü aç</button>
+      <div class="transfers-wrap">
+        <div class="section-title">Son aktarımlar</div>
+        <ul class="transfers" id="transfers"></ul>
+        <p class="empty" id="transfers-empty">Henüz aktarım yok. Bir metin kopyalamayı deneyin.</p>
       </div>
-      <p id="log-result" class="muted log-result" hidden></p>
-    </div>
-  </section>
+      <footer class="bar">
+        <button class="btn link" id="open-settings"><i data-icon="gear"></i>Ayarlar</button>
+        <span class="muted" id="home-version"></span>
+      </footer>
+    </section>
 
-  <script src="app.js"></script>
+    <!-- Ayarlar: ana ekranın üstüne sağdan kayar -->
+    <section id="settings" class="sheet" aria-hidden="true">
+      <header class="sheet-head">
+        <button class="icon-btn" id="close-settings" aria-label="Geri"><i data-icon="back"></i></button>
+        <h2>Ayarlar</h2>
+      </header>
+      <div class="sheet-body">
+        <div class="group">
+          <div class="group-title">Genel</div>
+          <label class="card toggle-card">
+            <span><b>Bilgisayar açılınca başlat</b><small>Menü çubuğunda / tepside sessizce çalışır.</small></span>
+            <input type="checkbox" class="switch" id="autostart">
+          </label>
+          <p class="field-error" id="autostart-error" hidden></p>
+        </div>
+
+        <div class="group" id="settings-peer">
+          <div class="group-title">Eşleşmiş cihaz</div>
+          <div class="card">
+            <dl class="facts">
+              <dt>Ad</dt><dd id="peer-name"></dd>
+              <dt>Parmak izi</dt><dd class="mono" id="peer-fingerprint"></dd>
+              <dt>Son adres</dt><dd class="mono" id="peer-address"></dd>
+            </dl>
+            <div id="unpair-ask"><button class="btn danger-outline" id="unpair">Eşleşmeyi kaldır</button></div>
+            <div id="unpair-confirm" hidden>
+              <p class="small">Pano paylaşımı durur. Diğer bilgisayarda da eşleşmeyi kaldırmanız gerekir.</p>
+              <div class="row">
+                <button class="btn secondary" id="unpair-no">Vazgeç</button>
+                <button class="btn danger" id="unpair-yes">Kaldır</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="group-title">Güncellemeler</div>
+          <div class="card" id="settings-update"></div>
+        </div>
+
+        <div class="group" id="settings-troubleshoot">
+          <div class="group-title">Sorun giderme</div>
+          <div class="card">
+            <p class="small muted">Teşhis kaydı bağlantı ve aktarım olaylarını içerir; pano içeriği asla yazılmaz.</p>
+            <div class="row three">
+              <button class="btn secondary" id="log-copy">Kopyala</button>
+              <button class="btn secondary" id="log-save">Kaydet</button>
+              <button class="btn secondary" id="log-reveal">Klasörü aç</button>
+            </div>
+            <p class="small muted" id="log-result" hidden></p>
+            <details id="log-details"><summary>Kaydı göster</summary><pre class="log" id="log"></pre></details>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="group-title">Hakkında</div>
+          <div class="card">
+            <p><b>OpenContinuity</b> <span class="muted" id="about-version"></span></p>
+            <p class="small muted">Bu cihaz: <span id="about-device"></span> · <span class="mono" id="about-fingerprint"></span></p>
+            <ul class="small privacy">
+              <li>Veriler yalnız yerel ağda, şifreli olarak iki bilgisayar arasında gider.</li>
+              <li>Parola yöneticilerinin gizli işaretli kopyaları gönderilmez.</li>
+              <li>Karşı bilgisayar kapalıyken kopyalananlar biriktirilmez.</li>
+            </ul>
+            <p class="small muted">Ticari olmayan kullanım için ücretsizdir (PolyForm Noncommercial).</p>
+            <button class="btn secondary" id="open-project">GitHub sayfası</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

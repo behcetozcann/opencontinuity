@@ -2870,7 +2870,7 @@ dependencies = [
 
 [[package]]
 name = "oc"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -2884,7 +2884,7 @@ dependencies = [
 
 [[package]]
 name = "oc-clipboard"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "objc2",
@@ -2895,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "oc-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "oc-protocol",
  "sha2 0.11.1",
@@ -2903,7 +2903,7 @@ dependencies = [
 
 [[package]]
 name = "oc-discovery"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "hex",
@@ -2914,7 +2914,7 @@ dependencies = [
 
 [[package]]
 name = "oc-engine"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "directories",
@@ -2934,7 +2934,7 @@ dependencies = [
 
 [[package]]
 name = "oc-pairing"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "hex",
@@ -2948,7 +2948,7 @@ dependencies = [
 
 [[package]]
 name = "oc-protocol"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "postcard",
@@ -2958,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "oc-transport"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "oc-pairing",
@@ -2991,7 +2991,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencontinuity"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "auto-launch",

@@ -11,13 +11,14 @@
       {
         "label": "main",
         "title": "OpenContinuity",
-        "width": 440,
-        "height": 560,
-        "minWidth": 380,
-        "minHeight": 480,
-        "resizable": true,
+        "width": 380,
+        "height": 620,
+        "resizable": false,
         "visible": false,
-        "center": true
+        "center": true,
+        "maximizable": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

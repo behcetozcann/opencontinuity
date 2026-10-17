@@ -33,15 +33,26 @@ impl Transfer {
     }
 }
 
+/// Arayüzde gösterilen son aktarım sayısı.
+const RECENT_TRANSFERS: usize = 5;
+
 /// Arayüzün çizdiği her şey; her değişimde `view` olayıyla tamamı gönderilir.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct View {
     snapshot: Snapshot,
-    last_transfer: Option<Transfer>,
+    /// En yenisi başta.
+    recent_transfers: Vec<Transfer>,
     pairing_error: Option<String>,
     /// Motor durduysa (ör. port kullanımda) nedeni.
     engine_error: Option<String>,
     update: updater::UpdateStatus,
+}
+
+impl View {
+    fn record_transfer(&mut self, transfer: Transfer) {
+        self.recent_transfers.insert(0, transfer);
+        self.recent_transfers.truncate(RECENT_TRANSFERS);
+    }
 }
 
 pub struct AppState {
@@ -77,6 +88,8 @@ fn main() {
             commands::restart_engine,
             commands::check_update,
             commands::install_update,
+            commands::open_local_network_settings,
+            commands::open_project_page,
             diagnostics::read_log,
             diagnostics::save_log_to_desktop,
             diagnostics::reveal_log,
@@ -149,8 +162,8 @@ pub fn spawn_engine(app: AppHandle, engine: Engine, mut events: UnboundedReceive
 fn apply_event(app: &AppHandle, event: Event) {
     match event {
         Event::State(snapshot) => update_view(app, |view| view.snapshot = snapshot),
-        Event::Sent { bytes, .. } => update_view(app, |view| view.last_transfer = Some(Transfer::now("sent", bytes))),
-        Event::Received { bytes, .. } => update_view(app, |view| view.last_transfer = Some(Transfer::now("received", bytes))),
+        Event::Sent { bytes, .. } => update_view(app, |view| view.record_transfer(Transfer::now("sent", bytes))),
+        Event::Received { bytes, .. } => update_view(app, |view| view.record_transfer(Transfer::now("received", bytes))),
         Event::PairingFailed { reason } => update_view(app, |view| view.pairing_error = Some(reason)),
         Event::Paired { .. } => update_view(app, |view| view.pairing_error = None),
         Event::Skipped { .. } | Event::Disconnected { .. } | Event::Diagnostic { .. } => {}

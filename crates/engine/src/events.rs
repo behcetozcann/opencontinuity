@@ -31,6 +31,8 @@ pub struct Snapshot {
     pub connected_ip: Option<String>,
     pub paused: bool,
     pub pairing: Option<PairingStage>,
+    /// Eşe son bağlanma denemesinin hatası; bağlanınca temizlenir.
+    pub link_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
