@@ -1,4 +1,6 @@
-# Protokol v1 (taslak)
+# Protokol v2 (taslak)
+
+v2 (2026-10-17): `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
 
 ## Taşıma
 

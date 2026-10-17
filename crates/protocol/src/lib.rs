@@ -1,11 +1,11 @@
-//! Protokol v1: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
+//! Protokol v2: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
 //! Ayrıntı: `docs/protocol.md`.
 
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const VERSION: u16 = 1;
+pub const VERSION: u16 = 2;
 pub const MAX_FRAME_BYTES: usize = 5 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 
