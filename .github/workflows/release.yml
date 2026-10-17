@@ -1,15 +1,14 @@
 name: Release
 
-# `v*` etiketi gönderilince macOS (universal) ve Windows paketlerini gerçek
-# makinelerde derler, güncelleyici imzasıyla birlikte taslak Release'e koyar.
-# Taslak kontrol edilip yayınlanınca uygulamalar `latest.json` üzerinden görür.
+# `v*` etiketi (ya da elle tetikleme) macOS (universal) ve Windows paketlerini
+# gerçek makinelerde derler, güncelleyici imzalarıyla birlikte iş akışı çıktısı
+# olarak bırakır. Release'i `scripts/publish-release.sh` yükler ve yayınlar
+# (bu depoda Actions token'ı Release oluşturamıyor: "Resource not accessible
+# by integration").
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -20,9 +19,13 @@ jobs:
           - platform: macos-latest
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: --target universal-apple-darwin --bundles app,dmg
+            artifact: macos
+            bundle_dir: target/universal-apple-darwin/release/bundle
           - platform: windows-latest
             rust_targets: ""
             args: --bundles nsis
+            artifact: windows
+            bundle_dir: target/release/bundle
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -35,19 +38,20 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
           tauriScript: npx --yes @tauri-apps/cli@2
           args: ${{ matrix.args }}
-          tagName: ${{ github.ref_name }}
-          releaseName: OpenContinuity ${{ github.ref_name }}
-          releaseBody: |
-            **macOS:** `.dmg` dosyasını indirin, uygulamayı Applications'a sürükleyin. İlk açılışta sağ tık → Aç.
-            **Windows:** `-setup.exe` dosyasını indirip kurun. SmartScreen uyarısında "Ek bilgi → Yine de çalıştır".
 
-            Kurulu uygulamalar yeni sürümü kendiliğinden bulur.
-          releaseDraft: true
-          includeUpdaterJson: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            ${{ matrix.bundle_dir }}/dmg/*.dmg
+            ${{ matrix.bundle_dir }}/macos/*.app.tar.gz
+            ${{ matrix.bundle_dir }}/macos/*.app.tar.gz.sig
+            ${{ matrix.bundle_dir }}/nsis/*-setup.exe
+            ${{ matrix.bundle_dir }}/nsis/*-setup.exe.sig
