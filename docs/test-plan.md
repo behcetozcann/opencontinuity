@@ -1,4 +1,4 @@
-# Test planı — Faz 0
+# Test planı — Faz 0 ve Faz 1
 
 Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Gerçek cihaz testi yapılmadan madde işaretlenmez.
 
@@ -10,8 +10,9 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 - [x] Core: eşzamanlı kopyalama — yerel kopya gecikmiş uzak olayla ezilmez; eşitlikte belirleyici sonuç.
 - [x] Core: aynı `event_id` iki kez uygulanmaz.
 - [x] Pairing: iki uçta SAS eşit; farklı exporter farklı SAS.
-- [x] Transport (localhost): eşleşmiş iki örnek bağlanır; eşleşmemiş sertifika iki yönde reddedilir. (`unpair` sonrası red: M5'te `oc run` ile)
-- [ ] Heartbeat: eş yanıt vermeyince 15 sn içinde kopuk sayılır ve yeniden bağlanır.
+- [x] Transport (localhost): eşleşmiş iki örnek bağlanır; eşleşmemiş sertifika iki yönde reddedilir; eşleştirme ve senkron modundaki uçlar oturum kuramaz (v3).
+- [x] Engine (iki motor, sahte pano, localhost): eşleştirme + iki yönlü aktarım + yankı döngüsü yok; duraklatmada gönderim/uygulama yok ve devamdaki ilk kopya reddedilmez; `unpair` sonrası eski eş reddedilir ve yeniden eşleştirme çalışır; kod reddinde iki uçta da kayıt yok.
+- [x] Heartbeat: susan eş zaman aşımıyla kopuk sayılır (testte kısaltılmış sürelerle: 600 ms; gerçek değer 15 sn).
 
 ## Gerçek cihaz (Mac ↔ Windows, aynı LAN)
 
@@ -30,6 +31,25 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 | 11 | Yeniden başlatma sonrası tekrar eşleştirme istemez | [x] `oc run` yeniden başlatmaları (süreç, makine değil) | [x] süreç yeniden başlatma |
 | 12 | Elle adres (`--addr`) ile eşleştirme çalışır | [x] dinleyen taraf | [x] bağlanan taraf |
 
+## Gerçek cihaz — Faz 1 masaüstü uygulaması
+
+Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-setup.exe` (imzasız). İki tarafta da eski `oc run` kapalı, sync programı kapalı.
+
+| # | Senaryo | Mac | Windows |
+|---|---|---|---|
+| F1 | Kurulum/ilk açılış: Gatekeeper / SmartScreen uyarısı (adımlar not edilir) | [ ] | [ ] |
+| F2 | macOS yerel ağ izni ve pano gizlilik uyarısı çıkıyor mu? (sonuç not edilir) | [ ] | — |
+| F3 | Menü çubuğu / tepsi simgesi ve menüsü görünür; Dock'ta simge yok | [ ] | [ ] |
+| F4 | Faz 0 eşleşmesiyle açılınca kendiliğinden bağlanır | [ ] | [ ] |
+| F5 | Uygulamadan eşleşmeyi kaldır → iki tarafta Eşleştir → aynı kod → eşleşir | [ ] | [ ] |
+| F6 | Mac → Windows: Türkçe + emoji + çok satır, Not Defteri'nde görsel kontrol | [ ] | [ ] |
+| F7 | Windows → Mac metin | [ ] | [ ] |
+| F8 | Duraklat: gönderilmez, gelen uygulanmaz; Devam et sonrası ilk kopya gider | [ ] | [ ] |
+| F9 | Pencere kapatılınca uygulama tepside çalışmayı sürdürür; Çık ile kapanır | [ ] | [ ] |
+| F10 | Oturum kapat/aç (veya yeniden başlat) sonrası kendiliğinden başlar ve bağlanır | [ ] | [ ] |
+| F11 | Uyku/uyanma ve Wi-Fi kapat/aç sonrası toparlanır | [ ] | [ ] |
+| F12 | İkinci kez açmak yeni örnek başlatmaz, mevcut pencereyi öne getirir | [ ] | [ ] |
+
 ## Bulgular
 
 - **macOS yazma yarışı (2026-10-17):** Yazan uygulama `clearContents` + `setString` yapınca sayaç yalnız bir kez artıyor; araya giren okuma boş pano görürse o kopya kaçıyordu (1/9). `read_after_change` boş görünce 100 ms sonra yeniden okuyor; sonra 20/20.
@@ -39,4 +59,5 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 - **Aynı metnin birden çok gönderilmesi (2026-10-17):** 744 baytlık metin 3 kez gitti; o sırada başka bir pano senkron programı açıktı. Teşhis kaydıyla (sahip süreç + biçimler) o program kapalıyken Antigravity'den 9 kopyada 9 olay, tekrar yok. Antigravity tek kopyada 7 biçim yazıyor (sayaç +8); 250 ms yoklama bunları tek olaya indirdi. Sync programı açıkken sahip adıyla doğrulama yapılmadı.
 - **Hızlı yeniden bağlanma döngüsü (2026-10-17):** Eski sürümle karşılaşınca Mac 1 sn'de bir bağlanıp koptu; bekleme TLS sonrası sıfırlanıyordu. Artık eşten ilk geçerli mesaj (`Clock`) gelince sıfırlanıyor. Gerçek cihazda henüz yeniden üretilmedi.
 - **Uyku ve saat (2026-10-17):** macOS'ta `Instant` uykuda ilerlemiyor (Mac kaydı uykuyu ~56 sn kısa gösterdi). Heartbeat yine de uyanıştan sonraki ilk turda bağlantıyı kopuk saydı; davranış doğru, ama kayıttaki süreler uyku boyunca duvar saati değil.
+- **Duraklatma sonrası ilk kopya reddi (2026-10-17, otomatik test):** Duraklatmada gelen kopya uygulanmıyor ama Lamport saati de ilerlemiyordu; devamdaki ilk yerel kopya eşin son kopyasıyla aynı lamport'u alıp eşitlikte cihaz kimliği sırasına göre ~%50 reddediliyordu. Engine testi 8 koşuda kararsızdı; düzeltmeyle (duraklatmada da `observe_peer_clock`) 12/12.
 - **IP'siz eşleştirme sonrası ilk kopya (2026-10-17):** "Firma Adı, İl / İlçe ve Açık Adres" 40 bayt, hash ba018a43 iki uçta aynı.

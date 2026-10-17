@@ -1,4 +1,4 @@
-# Mimari (EDD) — Faz 0
+# Mimari (EDD) — Faz 0 / Faz 1
 
 ## Bileşenler
 
@@ -10,7 +10,9 @@
 | `pairing` | Cihaz kimliği (self-signed P-256), eş listesi, 6 haneli SAS |
 | `transport` | Karşılıklı TLS 1.3 (rustls, ring), parmak izi sabitleme, heartbeat |
 | `discovery` | mDNS / DNS-SD yayını ve taraması (`_opencontinuity._tcp.local.`) |
-| `apps/cli` | `oc` binary'si; bileşenleri birbirine bağlar |
+| `engine` | Senkron motoru: boşta → eşleştirme → senkron döngüsü durum makinesi; dışarıya `Event`/`Snapshot`, içeriye `Command` (Faz 1) |
+| `apps/cli` | `oc` binary'si; motoru çalıştırıp olayları yazdıran ince kabuk, teşhis aracı |
+| `apps/desktop` | Tauri 2 uygulaması: menü çubuğu/tepsi, pencere arayüzü (`ui/`, derleme adımsız HTML/JS), girişte başlatma, tek örnek, teşhis kaydı `oc.log` |
 
 ## Olay akışı
 
@@ -39,13 +41,15 @@ eşten Clip ─► core: event_id görüldü mü? ── evet ─► at
 
 ## Bağlantı yaşam döngüsü
 
-- Her iki cihaz da dinler ve eşi arar; aynı anda iki bağlantı kurulursa küçük `device_id`'nin başlattığı bağlantı kalır.
+- Her iki cihaz da dinler; yalnız parmak izi küçük olan taraf bağlanır (çift bağlantı yarışı yok). Geri bağlanma adresi, eşin `Hello` ile bildirdiği dinleme portunu kullanır.
+- Eşleştirme modundaki uç yalnız eşleştirme modundaki uçla oturum kurar (`Hello.pairing`); eşleşmesi kaldırılmış cihazın eski eşi eşleştirme akışını bozamaz.
+- Duraklatmada bağlantı açık kalır; yerel kopyalar gönderilmez, gelenler uygulanmaz ama gelen olayın Lamport değeri gözlenir.
 - 5 sn'de bir `Ping`; 15 sn yanıt yoksa kopuk sayılır, 1→30 sn üstel beklemeyle yeniden bağlanılır.
 - Çevrimdışı kuyruk yok; yeniden bağlanınca pano durumu gönderilmez, yalnız Lamport saatleri `Clock` ile eşitlenir (yeniden başlayan cihazın ilk kopyası reddedilmesin diye; 2026-10-17 gerçek cihaz testinde bulundu).
 
 ## Saklama
 
-- Cihaz anahtarı: PoC'de config dizininde 0600 izinli `identity.json`. İmzasız ve her derlemede değişen binary Keychain'de her seferinde onay isteyeceği için OS anahtarlığına Faz 1'de (imzalı uygulama) geçilir.
+- Cihaz anahtarı: PoC'de config dizininde 0600 izinli `identity.json`. İmzasız ve her derlemede değişen binary Keychain'de her seferinde onay isteyeceği için OS anahtarlığına imzalı uygulamayla geçilir; Faz 1 test sürümleri imzasız olduğu için dosyada kaldı.
 - Eş: kullanıcı config dizininde `peer.json` (ad, parmak izi, son adres). Config dizini macOS'ta `~/Library/Application Support/org.OpenContinuity.OpenContinuity`, Windows'ta `%APPDATA%\OpenContinuity\OpenContinuity\config`.
 
 ## Bilinmeyenler (Faz 0'da ölçülecek)
