@@ -142,7 +142,16 @@ function renderUpdate(update) {
     failed: update.message,
   };
   $("update-summary").textContent = summaries[state];
-  $("update-check").disabled = state === "checking" || busy;
+  // Güncelleme bulununca bu düğme kurulum düğmesine dönüşür.
+  const check = $("update-check");
+  const installable = state === "available" || (state === "failed" && pendingVersion);
+  check.className = installable ? "primary wide" : "secondary wide";
+  check.textContent = installable
+    ? `v${pendingVersion} sürümünü kur ve yeniden başlat`
+    : busy
+      ? "Güncelleniyor…"
+      : "Şimdi denetle";
+  check.disabled = state === "checking" || busy;
 }
 
 function render(next) {
@@ -223,11 +232,17 @@ function bind() {
     invoke("restart_engine");
   });
   $("engine-log").addEventListener("click", () => showTab("about"));
-  $("update-check").addEventListener("click", () => invoke("check_update"));
-  $("update-install").addEventListener("click", () => {
+  const installUpdate = () => {
     $("update-install").disabled = true;
+    $("update-check").disabled = true;
     invoke("install_update").catch(() => {});
+  };
+  $("update-check").addEventListener("click", () => {
+    const state = view.update.state;
+    if (state === "available" || (state === "failed" && pendingVersion)) installUpdate();
+    else invoke("check_update");
   });
+  $("update-install").addEventListener("click", installUpdate);
   $("log-copy").addEventListener("click", async () => {
     const text = await loadLog();
     if (text === null) return;
