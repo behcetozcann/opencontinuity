@@ -67,11 +67,11 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
     match event.id().as_ref() {
         "pause" => {
             let paused = state.view.lock().map(|view| view.snapshot.paused).unwrap_or(false);
-            state.handle.send(if paused { Command::Resume } else { Command::Pause });
+            state.engine().send(if paused { Command::Resume } else { Command::Pause });
         }
         "open" => show_window(app),
         "quit" => {
-            state.handle.send(Command::Shutdown);
+            state.engine().send(Command::Shutdown);
             app.exit(0);
         }
         _ => {}

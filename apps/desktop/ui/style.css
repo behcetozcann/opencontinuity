@@ -143,4 +143,23 @@ input:not([type]) {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+#engine-error .row { margin-top: 8px; }
+
+.log {
+  font: 11px/1.4 ui-monospace, "SF Mono", Consolas, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  margin: 0 0 10px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.log-result { margin: 10px 0 0; overflow-wrap: anywhere; }
+
 [hidden] { display: none !important; }

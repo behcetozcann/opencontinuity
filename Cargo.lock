@@ -2889,6 +2889,7 @@ name = "opencontinuity"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "directories",
  "oc-engine",
  "oc-pairing",
  "serde",

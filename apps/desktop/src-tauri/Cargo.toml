@@ -10,6 +10,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 anyhow.workspace = true
+directories = "6"
 oc-engine = { path = "../../../crates/engine" }
 oc-pairing = { path = "../../../crates/pairing" }
 serde = { version = "1", features = ["derive"] }

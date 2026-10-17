@@ -17,6 +17,8 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 /// İlk açılışta girişte başlatmayı bir kez açtığımızı hatırlar; kullanıcı kapatırsa saygı duyulur.
 const AUTOSTART_MARKER: &str = "autostart-initialized";
+/// Girişte otomatik başlatılınca verilen argüman; o zaman pencere gizli kalır.
+const AUTOSTART_ARG: &str = "--autostart";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Transfer {
@@ -43,8 +45,15 @@ pub struct View {
 }
 
 pub struct AppState {
-    handle: Handle,
+    /// Motor yeniden başlatılınca değişir.
+    handle: Mutex<Handle>,
     view: Mutex<View>,
+}
+
+impl AppState {
+    pub fn engine(&self) -> Handle {
+        self.handle.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
+    }
 }
 
 fn main() {
@@ -54,7 +63,7 @@ fn main() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_window(app)));
     }
     let app = builder
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![AUTOSTART_ARG])))
         .invoke_handler(tauri::generate_handler![
             commands::get_view,
             commands::start_pairing,
@@ -65,19 +74,25 @@ fn main() {
             commands::autostart_enabled,
             commands::set_autostart,
             commands::app_version,
+            commands::restart_engine,
+            diagnostics::read_log,
+            diagnostics::save_log_to_desktop,
+            diagnostics::reveal_log,
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let config = EngineConfig::system()?;
             let unpaired = PeerStore::new(&config.config_dir).load()?.is_none();
-            enable_autostart_once(app.handle(), &config.config_dir);
+            sync_autostart(app.handle(), &config.config_dir);
             diagnostics::open(&config.config_dir);
             let (engine, handle, events) = Engine::new(config, ClipboardSource::System);
-            app.manage(AppState { handle, view: Mutex::new(View::default()) });
+            app.manage(AppState { handle: Mutex::new(handle), view: Mutex::new(View::default()) });
             tray::create(app.handle())?;
             spawn_engine(app.handle().clone(), engine, events);
-            if unpaired {
+            // Elle açılışta pencere görünür; girişte otomatik açılışta eş varsa yalnız simge.
+            let autostarted = std::env::args().any(|arg| arg == AUTOSTART_ARG);
+            if unpaired || !autostarted {
                 show_window(app.handle());
             }
             Ok(())
@@ -106,7 +121,7 @@ pub fn show_window(app: &AppHandle) {
     }
 }
 
-fn spawn_engine(app: AppHandle, engine: Engine, mut events: UnboundedReceiver<Event>) {
+pub fn spawn_engine(app: AppHandle, engine: Engine, mut events: UnboundedReceiver<Event>) {
     let app_for_errors = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(error) = engine.run().await {
@@ -146,10 +161,15 @@ pub fn update_view(app: &AppHandle, change: impl FnOnce(&mut View)) {
     tray::refresh(app, &view);
 }
 
-fn enable_autostart_once(app: &AppHandle, config_dir: &std::path::Path) {
+fn sync_autostart(app: &AppHandle, config_dir: &std::path::Path) {
     let marker = config_dir.join(AUTOSTART_MARKER);
     // Geliştirme derlemesi girişe kaydedilmez; kayıt target/ altındaki binary'yi gösterirdi.
-    if cfg!(debug_assertions) || marker.exists() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    // Açıksa yeniden yazılır: eski kayıtlarda --autostart argümanı yoktu.
+    let refresh = marker.exists() && app.autolaunch().is_enabled().unwrap_or(false);
+    if marker.exists() && !refresh {
         return;
     }
     match app.autolaunch().enable() {

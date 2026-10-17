@@ -19,9 +19,15 @@ use crate::{Command, Context, Flow, Timing, next_found};
 pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> {
     let port = context.config.port;
     let timing = context.config.timing;
-    let listener = TcpListener::bind(("0.0.0.0", port))
-        .await
-        .with_context(|| format!("port {port} açılamadı (OpenContinuity zaten çalışıyor olabilir)"))?;
+    // Port açılamasa da arayüz kayıtlı eşi göstersin.
+    let summary = summary(&peer);
+    context.events.update(|snapshot| {
+        snapshot.peer = Some(summary);
+        snapshot.connected_ip = None;
+    });
+    let listener = TcpListener::bind(("0.0.0.0", port)).await.with_context(|| {
+        format!("port {port} başka bir program tarafından kullanılıyor (açık kalmış bir `oc run` ya da ikinci OpenContinuity olabilir)")
+    })?;
     let discovery = if context.config.discovery {
         Some(Discovery::start(&context.identity.name, &context.identity.fingerprint(), port, false)?)
     } else {
@@ -40,11 +46,6 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
     let mut retry = Retry::new(timing);
     let mut heartbeat = interval(timing.heartbeat_interval);
 
-    let summary = summary(&peer);
-    context.events.update(|snapshot| {
-        snapshot.peer = Some(summary);
-        snapshot.connected_ip = None;
-    });
     let role = if dialer { "bağlanan" } else { "bekleyen" };
     context.events.diagnostic(format!("Çalışıyor. Eş: {} ({role} taraf).", peer.name));
     loop {

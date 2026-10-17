@@ -11,7 +11,8 @@ cargo build --target x86_64-pc-windows-gnu         # Windows .exe (mingw-w64, .c
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cd apps/desktop/src-tauri && cargo tauri build --bundles app,dmg                          # macOS paketi
-cd apps/desktop/src-tauri && cargo tauri build --target x86_64-pc-windows-gnu --bundles nsis  # Windows installer (makensis gerekli)
+# Windows installer: msvc + cargo-xwin (gnu hedefi WebView2Loader.dll'e bağımlı kalıyor, kullanıcıda 'bulunamadı' hatası verdi)
+cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
 ```
 
 ## Yapı

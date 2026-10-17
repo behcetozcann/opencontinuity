@@ -16,6 +16,25 @@ function showTab(name) {
   document.querySelectorAll(".tab").forEach((section) => {
     section.hidden = section.id !== `tab-${name}`;
   });
+  if (name === "about") loadLog();
+}
+
+async function loadLog() {
+  try {
+    const text = await invoke("read_log");
+    const log = $("log");
+    log.textContent = text;
+    log.scrollTop = log.scrollHeight;
+    return text;
+  } catch (error) {
+    $("log").textContent = `Kayıt okunamadı: ${error}`;
+    return null;
+  }
+}
+
+function showLogResult(message) {
+  $("log-result").hidden = false;
+  $("log-result").textContent = message;
 }
 
 function formatTransfer(transfer) {
@@ -44,7 +63,7 @@ function renderStatus(snapshot) {
   $("status-dot").className = `dot ${look}`;
   $("status-pause").hidden = !peer;
   $("status-pause").textContent = snapshot.paused ? "Devam et" : "Duraklat";
-  $("status-pair").hidden = Boolean(peer || snapshot.pairing);
+  $("status-pair").hidden = Boolean(peer || snapshot.pairing || view.engine_error);
   $("last-transfer").textContent = formatTransfer(view.last_transfer);
 }
 
@@ -95,7 +114,8 @@ function render(next) {
   view = next;
   const snapshot = view.snapshot;
   $("engine-error").hidden = !view.engine_error;
-  $("engine-error").textContent = view.engine_error ? `OpenContinuity durdu: ${view.engine_error}` : "";
+  $("engine-error-text").textContent = view.engine_error ? `OpenContinuity durdu: ${view.engine_error}` : "";
+  $("engine-retry").disabled = false;
   renderStatus(snapshot);
   renderPeer(snapshot);
   renderPairing(snapshot);
@@ -160,6 +180,35 @@ function bind() {
   $("unpair-yes").addEventListener("click", () => {
     resetUnpairConfirm();
     invoke("unpair");
+  });
+  $("engine-retry").addEventListener("click", () => {
+    $("engine-retry").disabled = true;
+    invoke("restart_engine");
+  });
+  $("engine-log").addEventListener("click", () => showTab("about"));
+  $("log-copy").addEventListener("click", async () => {
+    const text = await loadLog();
+    if (text === null) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showLogResult("Kayıt panoya kopyalandı; sohbete ya da e-postaya yapıştırabilirsiniz.");
+    } catch (error) {
+      showLogResult(`Kopyalanamadı: ${error}`);
+    }
+  });
+  $("log-save").addEventListener("click", async () => {
+    try {
+      showLogResult(`Kaydedildi: ${await invoke("save_log_to_desktop")}`);
+    } catch (error) {
+      showLogResult(`Kaydedilemedi: ${error}`);
+    }
+  });
+  $("log-reveal").addEventListener("click", async () => {
+    try {
+      await invoke("reveal_log");
+    } catch (error) {
+      showLogResult(`${error}`);
+    }
   });
   $("autostart").addEventListener("change", async (event) => {
     try {

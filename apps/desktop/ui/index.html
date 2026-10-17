@@ -14,7 +14,13 @@
     <button role="tab" data-tab="about">Hakkında</button>
   </nav>
 
-  <div id="engine-error" class="banner error" hidden></div>
+  <div id="engine-error" class="banner error" hidden>
+    <p id="engine-error-text"></p>
+    <div class="row">
+      <button id="engine-retry" class="secondary">Yeniden dene</button>
+      <button id="engine-log" class="secondary">Kaydı gönder</button>
+    </div>
+  </div>
 
   <section id="tab-status" class="tab">
     <div class="card status-card">
@@ -121,6 +127,17 @@
         <li>Karşı cihaz kapalıyken kopyalananlar biriktirilmez.</li>
         <li>Parola, kod ya da hasta bilgisi kopyalayacaksanız paylaşımı duraklatabilirsiniz.</li>
       </ul>
+    </div>
+    <div class="card">
+      <h2>Teşhis kaydı</h2>
+      <p class="muted">Sorun bildirirken bu kaydı gönderin. Pano içeriği yer almaz; cihaz adları, IP adresleri ve aktarım boyutları bulunur.</p>
+      <pre id="log" class="log">Yükleniyor…</pre>
+      <div class="row">
+        <button id="log-copy" class="secondary">Kopyala</button>
+        <button id="log-save" class="secondary">Masaüstüne kaydet</button>
+        <button id="log-reveal" class="secondary">Klasörü aç</button>
+      </div>
+      <p id="log-result" class="muted log-result" hidden></p>
     </div>
   </section>
 
