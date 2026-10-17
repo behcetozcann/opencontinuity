@@ -20,8 +20,8 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 | 1 | `oc clip-watch` pano değişikliğini görür (içerik yazmadan) | [x] 20/20 olay (düzeltme sonrası) | [x] 4/4 olay (Türkçe çok satırlı metin + parola) |
 | 2 | macOS'ta pano okuma gizlilik uyarısı çıkıyor mu? (sonuç not edilir) | [!] Terminal'den: uyarı yok, `accessBehavior=always-allow`. Ayrı uygulama paketinde (Faz 1) yeniden ölçülecek | — |
 | 3 | Parola yöneticisinden kopyalanan parola gönderilmez | [!] Concealed/Transient tipleri simülasyonla tespit edildi; gerçek parola yöneticisiyle denenmedi | [x] Chrome Parola Yöneticisi kopyası "gizli" algılandı |
-| 4 | IP girmeden birbirini bulur | [ ] | [ ] |
-| 5 | 6 haneli kod iki ekranda aynı; reddedilince eşleşme kaydedilmez | [x] kod 957 010 iki ekranda aynı; red senaryosu yerelde iki örnekle | [x] |
+| 4 | IP girmeden birbirini bulur | [x] mDNS ile buldu, kod 768 170 iki ekranda aynı | [x] Güvenlik Duvarı uyarısı çıkmadı |
+| 5 | 6 haneli kod iki ekranda aynı; reddedilince eşleşme kaydedilmez | [x] kod 957 010 ve 768 170 iki ekranda aynı; red senaryosu yerelde iki örnekle | [x] |
 | 6 | Mac `Cmd+C` → Windows `Ctrl+V` | [x] gönderim kaydı eşleşti | [x] alım kaydı eşleşti; Not Defteri'nde görsel kontrol bekleniyor |
 | 7 | Windows `Ctrl+C` → Mac `Cmd+V` | [x] 10/10 alındı (Antigravity, Windows Terminal) | [x] |
 | 8 | Türkçe + emoji + çok satırlı metin bozulmaz | [x] Windows→Mac "ve Diş Sağlığı Eryaman" hash iki uçta aynı (ce607f7b) | [!] Mac→Windows emoji/çok satır görsel kontrolü yapılmadı |
@@ -39,3 +39,4 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 - **Aynı metnin birden çok gönderilmesi (2026-10-17):** 744 baytlık metin 3 kez gitti; o sırada başka bir pano senkron programı açıktı. Teşhis kaydıyla (sahip süreç + biçimler) o program kapalıyken Antigravity'den 9 kopyada 9 olay, tekrar yok. Antigravity tek kopyada 7 biçim yazıyor (sayaç +8); 250 ms yoklama bunları tek olaya indirdi. Sync programı açıkken sahip adıyla doğrulama yapılmadı.
 - **Hızlı yeniden bağlanma döngüsü (2026-10-17):** Eski sürümle karşılaşınca Mac 1 sn'de bir bağlanıp koptu; bekleme TLS sonrası sıfırlanıyordu. Artık eşten ilk geçerli mesaj (`Clock`) gelince sıfırlanıyor. Gerçek cihazda henüz yeniden üretilmedi.
 - **Uyku ve saat (2026-10-17):** macOS'ta `Instant` uykuda ilerlemiyor (Mac kaydı uykuyu ~56 sn kısa gösterdi). Heartbeat yine de uyanıştan sonraki ilk turda bağlantıyı kopuk saydı; davranış doğru, ama kayıttaki süreler uyku boyunca duvar saati değil.
+- **IP'siz eşleştirme sonrası ilk kopya (2026-10-17):** "Firma Adı, İl / İlçe ve Açık Adres" 40 bayt, hash ba018a43 iki uçta aynı.
