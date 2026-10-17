@@ -41,7 +41,7 @@ eşten Clip ─► core: event_id görüldü mü? ── evet ─► at
 
 - Her iki cihaz da dinler ve eşi arar; aynı anda iki bağlantı kurulursa küçük `device_id`'nin başlattığı bağlantı kalır.
 - 5 sn'de bir `Ping`; 15 sn yanıt yoksa kopuk sayılır, 1→30 sn üstel beklemeyle yeniden bağlanılır.
-- Çevrimdışı kuyruk yok; yeniden bağlanınca pano durumu gönderilmez.
+- Çevrimdışı kuyruk yok; yeniden bağlanınca pano durumu gönderilmez, yalnız Lamport saatleri `Clock` ile eşitlenir (yeniden başlayan cihazın ilk kopyası reddedilmesin diye; 2026-10-17 gerçek cihaz testinde bulundu).
 
 ## Saklama
 

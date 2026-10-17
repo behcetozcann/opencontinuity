@@ -132,3 +132,19 @@ impl Lcg {
         self.0 >> 33
     }
 }
+
+/// Gerçek cihaz testinde görüldü: Windows `oc run` yeniden başlayınca saati 0'dan
+/// başladı, ilk kopyası (lamport 1) Mac'in 7 dk önceki kopyasıyla (lamport 1)
+/// eşit sayılıp reddedildi.
+#[test]
+fn restarted_peer_first_copy_is_applied_after_clock_sync() {
+    let mut mac = SyncState::new(MAC);
+    mac.on_local_text("7 dk önceki Mac kopyası".into()).unwrap();
+
+    let mut restarted_windows = SyncState::new(WINDOWS);
+    restarted_windows.observe_peer_clock(mac.clock());
+    mac.observe_peer_clock(restarted_windows.clock());
+
+    let event = restarted_windows.on_local_text("yeni Windows kopyası".into()).unwrap();
+    assert!(mac.on_remote(&WINDOWS, &event));
+}

@@ -1,0 +1,16 @@
+[package]
+name = "oc-discovery"
+description = "mDNS / DNS-SD ile yerel ağda OpenContinuity cihazlarını yayınlama ve bulma"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+hex = "0.4"
+mdns-sd = "0.21"
+oc-pairing = { path = "../pairing" }
+tokio.workspace = true
+
+[lints]
+workspace = true

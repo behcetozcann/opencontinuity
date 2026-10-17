@@ -9,6 +9,8 @@ use crate::{Clipboard, Content};
 /// nspasteboard.org kuralları: parola yöneticileri bu tiplerle işaretler.
 const SENSITIVE_TYPES: [&str; 2] = ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType"];
 
+const SOURCE_TYPE: &str = "org.nspasteboard.source";
+
 pub struct MacClipboard {
     pasteboard: Retained<NSPasteboard>,
 }
@@ -54,6 +56,21 @@ impl Clipboard for MacClipboard {
             anyhow::bail!("NSPasteboard metni kabul etmedi");
         }
         Ok(())
+    }
+
+    fn describe_source(&self) -> String {
+        let types: Vec<String> = self
+            .pasteboard
+            .types()
+            .map(|types| types.iter().map(|pasteboard_type| pasteboard_type.to_string()).collect())
+            .unwrap_or_default();
+        // nspasteboard.org: bazı uygulamalar kendi paket kimliğini bu tipe yazar.
+        let source = self
+            .pasteboard
+            .stringForType(&NSString::from_str(SOURCE_TYPE))
+            .map(|source| source.to_string())
+            .unwrap_or_else(|| "?".to_owned());
+        format!("kaynak {source}, tipler [{}]", types.join(", "))
     }
 }
 

@@ -21,6 +21,7 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 |---|---|---|
 | `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String` | Bağlantıdaki ilk mesaj; sürüm uyuşmazsa bağlantı kapanır |
 | `PairDecision` | `accepted: bool` | Yalnız eşleştirmede; iki uç da `true` göndermeden eş kaydedilmez |
+| `Clock` | `lamport: u64` | `oc run` bağlantısında `Hello`'dan hemen sonra; alan taraf saatini `max(kendi, gelen)` yapar. Yeniden başlayan cihazın ilk kopyası böylece eski görünmez |
 | `Clip` | `event_id: [u8; 16]`, `lamport: u64`, `text: String` | Düz metin pano olayı |
 | `Ping` | `nonce: u64` | 5 sn'de bir |
 | `Pong` | `nonce: u64` | |

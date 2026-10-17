@@ -12,6 +12,8 @@ directories = "6"
 gethostname = "1"
 hex = "0.4"
 oc-clipboard = { version = "0.0.1", path = "../../crates/clipboard" }
+oc-core = { version = "0.0.1", path = "../../crates/core" }
+oc-discovery = { version = "0.0.1", path = "../../crates/discovery" }
 oc-pairing = { version = "0.0.1", path = "../../crates/pairing" }
 oc-protocol = { version = "0.0.1", path = "../../crates/protocol" }
 oc-transport = { version = "0.0.1", path = "../../crates/transport" }

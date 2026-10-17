@@ -1,6 +1,8 @@
 mod clip;
+mod clipboard_thread;
 mod config;
 mod pair;
+mod run;
 
 use clap::{Parser, Subcommand};
 
@@ -21,7 +23,7 @@ enum Command {
     ClipSet { text: String },
     /// Cihaz kimliğini ve eşleşmiş eşi gösterir.
     Id,
-    /// Eşleştirir. `--addr` yoksa bekler ve bağlanılacak adresi yazar.
+    /// Eşleştirir. `--addr` yoksa aynı ağda `oc pair` çalıştıran cihazı kendisi bulur.
     Pair {
         /// Karşı cihazın adresi (IP veya IP:PORT).
         #[arg(long)]
@@ -29,6 +31,8 @@ enum Command {
     },
     /// Eşleşmeyi kaldırır.
     Unpair,
+    /// Eşle bağlantıyı ayakta tutar ve panoyu iki yönde senkronlar.
+    Run,
 }
 
 #[tokio::main]
@@ -50,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Id => pair::show_identity()?,
         Command::Pair { addr } => pair::pair(addr).await?,
         Command::Unpair => pair::unpair()?,
+        Command::Run => run::run().await?,
     }
     Ok(())
 }

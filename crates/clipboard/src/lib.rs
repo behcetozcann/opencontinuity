@@ -24,6 +24,8 @@ pub trait Clipboard {
     fn sequence(&self) -> u64;
     fn read(&self) -> anyhow::Result<Content>;
     fn write_text(&self, text: &str) -> anyhow::Result<()>;
+    /// Teşhis için panoyu kimin doldurduğu ve hangi biçimler olduğu; içerik içermez.
+    fn describe_source(&self) -> String;
 }
 
 /// Sayaç değiştikten sonra okur. Yazan uygulama önce panoyu temizleyip sonra

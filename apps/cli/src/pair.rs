@@ -2,6 +2,7 @@ use std::io::BufRead;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 
 use anyhow::bail;
+use oc_discovery::Discovery;
 use oc_pairing::{Identity, Peer, PeerStore, sas_code};
 use oc_protocol::Message;
 use oc_transport::{DEFAULT_PORT, Session, Trust};
@@ -31,7 +32,7 @@ pub async fn pair(address: Option<String>) -> anyhow::Result<()> {
             let address = with_default_port(&address);
             (oc_transport::connect(address.as_str(), &identity, Trust::Pairing).await?, address)
         }
-        None => listen_once(&identity).await?,
+        None => discover_or_listen(&identity).await?,
     };
 
     let code = sas_code(&identity.fingerprint(), &session.peer_fingerprint, &session.exporter);
@@ -67,15 +68,36 @@ pub fn unpair() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn listen_once(identity: &Identity) -> anyhow::Result<(Session, String)> {
+/// Dinler ve mDNS ile yayın yapar; eşleştirme modundaki cihaz bulunursa
+/// parmak izi küçük olan taraf bağlanır, diğeri bağlantıyı kabul eder.
+async fn discover_or_listen(identity: &Identity) -> anyhow::Result<(Session, String)> {
     let listener = TcpListener::bind(("0.0.0.0", DEFAULT_PORT)).await?;
-    match local_ip() {
-        Some(ip) => println!("Bekleniyor. Diğer cihazda çalıştır:  oc pair --addr {ip}"),
-        None => println!("Bekleniyor (port {DEFAULT_PORT})."),
+    let discovery = Discovery::start(&identity.name, &identity.fingerprint(), DEFAULT_PORT, true)?;
+    let mut discovered = discovery.browse()?;
+    let own_hex = hex::encode(identity.fingerprint());
+    println!("Aynı ağda `oc pair` çalıştıran cihaz aranıyor...");
+    if let Some(ip) = local_ip() {
+        println!("Bulunamazsa diğer cihazda:  oc pair --addr {ip}");
     }
-    let (tcp, remote) = listener.accept().await?;
-    let session = oc_transport::accept(tcp, identity, Trust::Pairing).await?;
-    Ok((session, format!("{}:{DEFAULT_PORT}", remote.ip())))
+    loop {
+        tokio::select! {
+            accepted = listener.accept() => {
+                let (tcp, remote) = accepted?;
+                let session = oc_transport::accept(tcp, identity, Trust::Pairing).await?;
+                return Ok((session, format!("{}:{DEFAULT_PORT}", remote.ip())));
+            }
+            Some(found) = discovered.recv() => {
+                if !found.pairing || found.fingerprint_hex < own_hex {
+                    continue;
+                }
+                for address in found.addresses {
+                    if let Ok(session) = oc_transport::connect(address, identity, Trust::Pairing).await {
+                        return Ok((session, address.to_string()));
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn with_default_port(address: &str) -> String {

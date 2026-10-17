@@ -17,6 +17,8 @@ pub enum Message {
     Hello { version: u16, device_id: DeviceId, name: String },
     /// Eşleştirmede kullanıcının kararı; iki uç da `true` göndermeden eş kaydedilmez.
     PairDecision { accepted: bool },
+    /// Bağlantı kurulunca gönderilir: göndericinin Lamport saati.
+    Clock { lamport: u64 },
     Clip(ClipEvent),
     Ping { nonce: u64 },
     Pong { nonce: u64 },

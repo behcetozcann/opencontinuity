@@ -29,6 +29,16 @@ impl SyncState {
         }
     }
 
+    pub fn clock(&self) -> u64 {
+        self.clock
+    }
+
+    /// Bağlantı kurulunca eşin saati alınır. Yeniden başlayan taraf saatini
+    /// 0'dan başlattığı için bu yapılmazsa ilk kopyaları karşıya eski görünür.
+    pub fn observe_peer_clock(&mut self, peer_clock: u64) {
+        self.clock = self.clock.max(peer_clock);
+    }
+
     /// Yerel pano değişti. Karşıya gönderilecek olayı döner; kendi yazdığımız
     /// uzak içeriğin yankısıysa `None`.
     pub fn on_local_text(&mut self, text: String) -> Option<ClipEvent> {

@@ -1,13 +1,18 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use windows::Win32::Foundation::{HANDLE, HGLOBAL};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HGLOBAL};
 use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardSequenceNumber,
-    IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardFormatNameW,
+    GetClipboardOwner, GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
+    RegisterClipboardFormatW, SetClipboardData,
 };
 use windows::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock};
-use windows::core::w;
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+};
+use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+use windows::core::{PWSTR, w};
 
 use crate::{Clipboard, Content};
 
@@ -96,6 +101,67 @@ impl Clipboard for WindowsClipboard {
         }
         Ok(())
     }
+
+    fn describe_source(&self) -> String {
+        // SAFETY: salt okunur sorgular; biçim listesi pano açıkken okunur.
+        let owner = unsafe { owner_process() }.unwrap_or_else(|| "?".to_owned());
+        let formats = match OpenGuard::open() {
+            Ok(_guard) => unsafe { list_formats() },
+            Err(_) => "pano kilitli".to_owned(),
+        };
+        format!("sahip {owner}, biçimler [{formats}]")
+    }
+}
+
+unsafe fn owner_process() -> Option<String> {
+    unsafe {
+        let window = GetClipboardOwner().ok()?;
+        let mut process_id = 0u32;
+        GetWindowThreadProcessId(window, Some(&mut process_id));
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id).ok()?;
+        let mut buffer = [0u16; 260];
+        let mut size = buffer.len() as u32;
+        let result = QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, PWSTR(buffer.as_mut_ptr()), &mut size);
+        let _ = CloseHandle(process);
+        result.ok()?;
+        let path = String::from_utf16_lossy(&buffer[..size as usize]);
+        Some(path.rsplit('\\').next().unwrap_or(&path).to_owned())
+    }
+}
+
+/// Pano açıkken çağrılmalı.
+unsafe fn list_formats() -> String {
+    let mut names = Vec::new();
+    let mut format = 0;
+    loop {
+        format = unsafe { EnumClipboardFormats(format) };
+        if format == 0 {
+            break;
+        }
+        names.push(format_name(format));
+    }
+    names.join(", ")
+}
+
+fn format_name(format: u32) -> String {
+    let standard = match format {
+        1 => "CF_TEXT",
+        2 => "CF_BITMAP",
+        7 => "CF_OEMTEXT",
+        8 => "CF_DIB",
+        13 => "CF_UNICODETEXT",
+        15 => "CF_HDROP",
+        16 => "CF_LOCALE",
+        17 => "CF_DIBV5",
+        _ => "",
+    };
+    if !standard.is_empty() {
+        return standard.to_owned();
+    }
+    let mut buffer = [0u16; 128];
+    // SAFETY: tampon boyutu fonksiyona dilim olarak verilir.
+    let length = unsafe { GetClipboardFormatNameW(format, &mut buffer) };
+    if length > 0 { String::from_utf16_lossy(&buffer[..length as usize]) } else { format!("#{format}") }
 }
 
 /// Pano açıkken çağrılmalı. Biçim yoksa `None`.
