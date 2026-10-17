@@ -10,7 +10,7 @@ cargo build                                        # macOS
 cargo build --target x86_64-pc-windows-gnu         # Windows .exe (mingw-w64, .cargo/config.toml)
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-cd apps/desktop/src-tauri && cargo tauri build --bundles app,dmg                          # macOS paketi
+cd apps/desktop/src-tauri && cargo tauri build --bundles app,dmg                          # macOS paketi (yerel, imzasız; yayın CI'dan)
 # Windows installer: msvc + cargo-xwin (gnu hedefi WebView2Loader.dll'e bağımlı kalıyor, kullanıcıda 'bulunamadı' hatası verdi)
 cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
 ```
@@ -29,11 +29,22 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 - Gerçek cihaz testi yapılmadıysa `docs/test-plan.md`'de işaretlenmez.
 - Dosya başına 300 satırı geçme.
 
-## Durum (2026-10-17)
+## Durum (2026-10-18)
 
-Faz 0 PoC tamam (ayrıntı: `docs/test-plan.md` → "Bulgular"). Faz 1 (`faz-1` dalı): motor `crates/engine`'e taşındı, protokol v3, Tauri masaüstü uygulaması (tepsi, eşleştirme arayüzü, girişte başlatma), macOS .dmg ve Windows NSIS installer üretiliyor. Gerçek cihaz testleri `docs/test-plan.md` → "Faz 1" tablosunda bekliyor.
+Faz 1 kodu `main`'de; depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: v0.1.1. v0.1.2 (yeni arayüz + Developer ID imzası + noterlik) derleniyor; ilk noterlik Apple'da bekliyor.
 
-Açık kalanlar: Faz 1 gerçek cihaz tablosu (F1–F12); macOS pano gizlilik ve yerel ağ izni uyarısının uygulama paketinde ölçülmesi; gerçek simge tasarımı (şu an yer tutucu); imzalama (Apple Developer / Windows sertifikası) kararı.
+Sıradaki: v0.1.2 yayını → Mac'te Yerel Ağ iznini bir kez ver (imza artık sabit) → Windows'u güncelle → sihirbazla eşleştir → `docs/test-plan.md` Faz 1 tablosu (F1–F12).
+
+Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
+
+## Yayın akışı
+
+1. `Cargo.toml` `[workspace.package] version` artır, commit, `git tag -a vX.Y.Z`, push.
+2. `gh workflow run release.yml -R behcetozcann/opencontinuity --ref vX.Y.Z` (etiket push'u şu an tetiklemiyor).
+3. Derleme bitince `scripts/publish-release.sh vX.Y.Z --publish`: çıktıları indirir, `latest.json` üretir, Release'e yükler. Kurulu uygulamalar 6 saatte bir (ya da Ayarlar → Denetle) bulur.
+4. Noterlik durumu: `scripts/notary-status.sh` (Apple'da web sayfası yok).
+
+İmza/anahtarlar (repoda değil): güncelleyici anahtarı `~/.tauri/opencontinuity.key(.password)`; Developer ID `~/.tauri/developer-id.{key.pem,cer,p12,p12.password}` (G2, 2027-11-16'ya kadar); ASC API `~/.appstoreconnect/opencontinuity.env` + `AuthKey_3VZKZ58F7D.p8`. Hepsi GitHub Secrets'ta da var. Yerel derleme imzasızdır; dağıtım yalnız CI'dan.
 
 ## Gerçek cihaz test akışı
 
