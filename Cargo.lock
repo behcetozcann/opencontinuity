@@ -2870,7 +2870,7 @@ dependencies = [
 
 [[package]]
 name = "oc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2884,7 +2884,7 @@ dependencies = [
 
 [[package]]
 name = "oc-clipboard"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "objc2",
@@ -2895,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "oc-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "oc-protocol",
  "sha2 0.11.1",
@@ -2903,7 +2903,7 @@ dependencies = [
 
 [[package]]
 name = "oc-discovery"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -2914,7 +2914,7 @@ dependencies = [
 
 [[package]]
 name = "oc-engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "directories",
@@ -2934,7 +2934,7 @@ dependencies = [
 
 [[package]]
 name = "oc-pairing"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -2948,7 +2948,7 @@ dependencies = [
 
 [[package]]
 name = "oc-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "postcard",
@@ -2958,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "oc-transport"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "oc-pairing",
@@ -2991,9 +2991,10 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencontinuity"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
+ "auto-launch",
  "directories",
  "oc-engine",
  "oc-pairing",
@@ -3001,7 +3002,6 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
- "tauri-plugin-autostart",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tokio",
@@ -4458,20 +4458,6 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
-]
-
-[[package]]
-name = "tauri-plugin-autostart"
-version = "2.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bce56ceb0a99b8ab5eebc977ba9ffc62391b862648cb9ab76fc8bc7231b8f7e2"
-dependencies = [
- "auto-launch",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.21",
 ]
 
 [[package]]

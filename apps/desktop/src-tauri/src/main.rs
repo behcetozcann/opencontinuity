@@ -1,6 +1,7 @@
 // Windows sürüm derlemesinde konsol penceresi açılmasın.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod commands;
 mod diagnostics;
 mod tray;
@@ -13,13 +14,10 @@ use oc_engine::{ClipboardSource, Engine, EngineConfig, Event, Handle, Snapshot};
 use oc_pairing::PeerStore;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 /// İlk açılışta girişte başlatmayı bir kez açtığımızı hatırlar; kullanıcı kapatırsa saygı duyulur.
 const AUTOSTART_MARKER: &str = "autostart-initialized";
-/// Girişte otomatik başlatılınca verilen argüman; o zaman pencere gizli kalır.
-const AUTOSTART_ARG: &str = "--autostart";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Transfer {
@@ -66,7 +64,6 @@ fn main() {
     }
     let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![AUTOSTART_ARG])))
         .invoke_handler(tauri::generate_handler![
             commands::get_view,
             commands::start_pairing,
@@ -98,7 +95,7 @@ fn main() {
             spawn_engine(app.handle().clone(), engine, events);
             updater::spawn_periodic_check(app.handle().clone());
             // Elle açılışta pencere görünür; girişte otomatik açılışta eş varsa yalnız simge.
-            let autostarted = std::env::args().any(|arg| arg == AUTOSTART_ARG);
+            let autostarted = std::env::args().any(|arg| arg == autostart::AUTOSTART_ARG);
             if unpaired || !autostarted {
                 show_window(app.handle());
             }
@@ -177,12 +174,12 @@ fn sync_autostart(app: &AppHandle, config_dir: &std::path::Path) {
     if cfg!(debug_assertions) {
         return;
     }
-    // Açıksa yeniden yazılır: eski kayıtlarda --autostart argümanı yoktu.
-    let refresh = marker.exists() && app.autolaunch().is_enabled().unwrap_or(false);
+    // Açıksa yeniden yazılır: eski kayıtlarda argüman ve uygulama kimliği eksikti.
+    let refresh = marker.exists() && autostart::is_enabled(app).unwrap_or(false);
     if marker.exists() && !refresh {
         return;
     }
-    match app.autolaunch().enable() {
+    match autostart::set_enabled(app, true) {
         Ok(()) => {
             let _ = std::fs::create_dir_all(config_dir);
             let _ = std::fs::write(marker, b"");

@@ -2,9 +2,8 @@
 
 use oc_engine::{ClipboardSource, Command, Engine, EngineConfig};
 use tauri::{AppHandle, State};
-use tauri_plugin_autostart::ManagerExt;
 
-use crate::{AppState, View, diagnostics, spawn_engine, update_view, updater};
+use crate::{AppState, View, autostart, diagnostics, spawn_engine, update_view, updater};
 
 #[tauri::command]
 pub fn get_view(state: State<'_, AppState>) -> View {
@@ -40,14 +39,12 @@ pub fn unpair(state: State<'_, AppState>) {
 
 #[tauri::command]
 pub fn autostart_enabled(app: AppHandle) -> Result<bool, String> {
-    app.autolaunch().is_enabled().map_err(|error| error.to_string())
+    autostart::is_enabled(&app)
 }
 
 #[tauri::command]
 pub fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let autolaunch = app.autolaunch();
-    let result = if enabled { autolaunch.enable() } else { autolaunch.disable() };
-    result.map_err(|error| error.to_string())
+    autostart::set_enabled(&app, enabled)
 }
 
 #[tauri::command]
