@@ -35,7 +35,7 @@ eşten Clip ─► core: event_id görüldü mü? ── evet ─► at
 ## Pano adaptörleri
 
 - **macOS:** `NSPasteboard.generalPasteboard`; `changeCount` 250 ms aralıkla okunur, değişince `public.utf8-plain-text` alınır. `org.nspasteboard.ConcealedType` veya `org.nspasteboard.TransientType` tipi varsa içerik okunmaz.
-- **Windows:** Görünmez mesaj penceresi + `AddClipboardFormatListener`; `WM_CLIPBOARDUPDATE` gelince `CF_UNICODETEXT` okunur. `ExcludeClipboardContentFromMonitorProcessing` biçimi varsa veya `CanIncludeInClipboardHistory` = 0 ise içerik okunmaz.
+- **Windows:** `GetClipboardSequenceNumber` 250 ms aralıkla okunur (PoC'de mesaj penceresi gerektirmediği için `AddClipboardFormatListener` yerine); değişince `CF_UNICODETEXT` okunur. `ExcludeClipboardContentFromMonitorProcessing` biçimi varsa ya da `CanIncludeInClipboardHistory` / `CanUploadToCloudClipboard` = 0 ise içerik okunmaz.
 
 ## Bağlantı yaşam döngüsü
 

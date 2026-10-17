@@ -17,15 +17,19 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 
 | # | Senaryo | Mac | Windows |
 |---|---|---|---|
-| 1 | `oc clip-watch` pano değişikliğini görür (içerik yazmadan) | [ ] | [ ] |
-| 2 | macOS'ta pano okuma gizlilik uyarısı çıkıyor mu? (sonuç not edilir) | [ ] | — |
-| 3 | Parola yöneticisinden kopyalanan parola gönderilmez | [ ] | [ ] |
+| 1 | `oc clip-watch` pano değişikliğini görür (içerik yazmadan) | [x] 20/20 olay (düzeltme sonrası) | [ ] |
+| 2 | macOS'ta pano okuma gizlilik uyarısı çıkıyor mu? (sonuç not edilir) | [!] Terminal'den: uyarı yok, `accessBehavior=always-allow`. Ayrı uygulama paketinde (Faz 1) yeniden ölçülecek | — |
+| 3 | Parola yöneticisinden kopyalanan parola gönderilmez | [!] Concealed/Transient tipleri simülasyonla tespit edildi; gerçek parola yöneticisiyle denenmedi | [ ] |
 | 4 | IP girmeden birbirini bulur | [ ] | [ ] |
 | 5 | 6 haneli kod iki ekranda aynı; reddedilince eşleşme kaydedilmez | [ ] | [ ] |
 | 6 | Mac `Cmd+C` → Windows `Ctrl+V` | [ ] | [ ] |
 | 7 | Windows `Ctrl+C` → Mac `Cmd+V` | [ ] | [ ] |
-| 8 | Türkçe + emoji + çok satırlı metin bozulmaz | [ ] | [ ] |
+| 8 | Türkçe + emoji + çok satırlı metin bozulmaz | [x] yerel gidiş-dönüş (eşler arası değil) | [ ] |
 | 9 | Wi-Fi kapat/aç sonrası kendiliğinden toparlanır (süre not edilir) | [ ] | [ ] |
 | 10 | Uyku/uyanma sonrası toparlanır (süre not edilir) | [ ] | [ ] |
 | 11 | Yeniden başlatma sonrası tekrar eşleştirme istemez | [ ] | [ ] |
 | 12 | Elle adres (`--addr`) ile eşleştirme çalışır | [ ] | [ ] |
+
+## Bulgular
+
+- **macOS yazma yarışı (2026-10-17):** Yazan uygulama `clearContents` + `setString` yapınca sayaç yalnız bir kez artıyor; araya giren okuma boş pano görürse o kopya kaçıyordu (1/9). `read_after_change` boş görünce 100 ms sonra yeniden okuyor; sonra 20/20.

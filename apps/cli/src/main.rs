@@ -1,3 +1,5 @@
+mod clip;
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -9,8 +11,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Sürüm ve platform bilgisini yazdırır.
+    /// Sürüm, platform ve pano erişim bilgisini yazdırır.
     Info,
+    /// Pano değişikliklerini izler; içerik değil yalnız uzunluk ve hash yazar.
+    ClipWatch,
+    /// Panoya metin yazar.
+    ClipSet { text: String },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -22,7 +28,12 @@ fn main() -> anyhow::Result<()> {
                 std::env::consts::OS,
                 std::env::consts::ARCH
             );
+            if let Some(behavior) = oc_clipboard::access_behavior() {
+                println!("macOS pano erişim davranışı: {behavior}");
+            }
         }
+        Command::ClipWatch => clip::watch()?,
+        Command::ClipSet { text } => clip::set(&text)?,
     }
     Ok(())
 }
