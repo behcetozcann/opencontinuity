@@ -24,9 +24,9 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 | 5 | 6 haneli kod iki ekranda aynı; reddedilince eşleşme kaydedilmez | [x] kod 957 010 iki ekranda aynı; red senaryosu yerelde iki örnekle | [x] |
 | 6 | Mac `Cmd+C` → Windows `Ctrl+V` | [x] gönderim kaydı eşleşti | [x] alım kaydı eşleşti; Not Defteri'nde görsel kontrol bekleniyor |
 | 7 | Windows `Ctrl+C` → Mac `Cmd+V` | [x] 10/10 alındı (Antigravity, Windows Terminal) | [x] |
-| 8 | Türkçe + emoji + çok satırlı metin bozulmaz | [x] yerel gidiş-dönüş (eşler arası değil) | [ ] |
-| 9 | Wi-Fi kapat/aç sonrası kendiliğinden toparlanır (süre not edilir) | [ ] | [ ] |
-| 10 | Uyku/uyanma sonrası toparlanır (süre not edilir) | [ ] | [ ] |
+| 8 | Türkçe + emoji + çok satırlı metin bozulmaz | [x] Windows→Mac "ve Diş Sağlığı Eryaman" hash iki uçta aynı (ce607f7b) | [!] Mac→Windows emoji/çok satır görsel kontrolü yapılmadı |
+| 9 | Wi-Fi kapat/aç sonrası kendiliğinden toparlanır (süre not edilir) | [x] kopma 15–20 sn'de algılandı, elle işlem gerekmedi | [x] Windows Wi-Fi kapatıldı; açılış anı ölçülmedi |
+| 10 | Uyku/uyanma sonrası toparlanır (süre not edilir) | [x] kapak 16:55:04–16:56:15 (pmset); uyanınca ilk heartbeat'te kopuk sayıldı, 1,1 sn'de yeniden bağlandı, sonraki kopya ulaştı | [x] |
 | 11 | Yeniden başlatma sonrası tekrar eşleştirme istemez | [x] `oc run` yeniden başlatmaları (süreç, makine değil) | [x] süreç yeniden başlatma |
 | 12 | Elle adres (`--addr`) ile eşleştirme çalışır | [x] dinleyen taraf | [x] bağlanan taraf |
 
@@ -38,3 +38,4 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 - **Yeniden başlayan cihazın ilk kopyası reddediliyordu (2026-10-17):** Windows `oc run` yeniden başlayınca Lamport saati 0'dan başladı; ilk kopyası (lamport 1) Mac'in 7 dk önceki kopyasıyla (lamport 1) eşit sayılıp reddedildi. Kök neden: saatler bağlantıda eşitlenmiyordu. Çözüm: `Clock` mesajı (protokol v2) + core'da yeniden üretme testi. Gerçek cihazda doğrulandı: yeniden başlatma sonrası ilk kopya (lamport 2) uygulandı, 10/10.
 - **Aynı metnin birden çok gönderilmesi (2026-10-17):** 744 baytlık metin 3 kez gitti; o sırada başka bir pano senkron programı açıktı. Teşhis kaydıyla (sahip süreç + biçimler) o program kapalıyken Antigravity'den 9 kopyada 9 olay, tekrar yok. Antigravity tek kopyada 7 biçim yazıyor (sayaç +8); 250 ms yoklama bunları tek olaya indirdi. Sync programı açıkken sahip adıyla doğrulama yapılmadı.
 - **Hızlı yeniden bağlanma döngüsü (2026-10-17):** Eski sürümle karşılaşınca Mac 1 sn'de bir bağlanıp koptu; bekleme TLS sonrası sıfırlanıyordu. Artık eşten ilk geçerli mesaj (`Clock`) gelince sıfırlanıyor. Gerçek cihazda henüz yeniden üretilmedi.
+- **Uyku ve saat (2026-10-17):** macOS'ta `Instant` uykuda ilerlemiyor (Mac kaydı uykuyu ~56 sn kısa gösterdi). Heartbeat yine de uyanıştan sonraki ilk turda bağlantıyı kopuk saydı; davranış doğru, ama kayıttaki süreler uyku boyunca duvar saati değil.
