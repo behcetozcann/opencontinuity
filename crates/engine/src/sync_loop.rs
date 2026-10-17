@@ -73,6 +73,8 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
             }
             Some(found) = next_found(&mut discovered) => {
                 if found.fingerprint_hex == peer_hex {
+                    let listed: Vec<String> = found.addresses.iter().map(ToString::to_string).collect();
+                    context.events.diagnostic(format!("Eş ağda bulundu: {}", listed.join(", ")));
                     for address in found.addresses.into_iter().rev() {
                         prepend_unique(&mut addresses, address);
                     }
@@ -83,10 +85,13 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
             }
             _ = sleep_until(retry.next_dial), if dialer && link.is_none() => {
                 match dial(&addresses, &context.identity, trust, port, timing.dial_timeout).await {
-                    Some((session, address)) => {
+                    Ok((session, address)) => {
                         link = activate(context, &mut peer, &mut addresses, session, address, &state).await?;
                     }
-                    None => retry.failed(),
+                    Err(failures) => {
+                        context.events.diagnostic(format!("Bağlanılamadı: {failures}"));
+                        retry.failed();
+                    }
                 }
             }
             text = context.clipboard.local_texts.recv() => {
@@ -177,20 +182,27 @@ async fn activate(
     Ok(Some(link))
 }
 
+/// Adresleri sırayla dener; hepsi başarısızsa her adresin hatasını döner.
 async fn dial(
     addresses: &[SocketAddr],
     identity: &Identity,
     trust: Trust,
     listen_port: u16,
     dial_timeout: Duration,
-) -> Option<(Session, SocketAddr)> {
+) -> Result<(Session, SocketAddr), String> {
+    if addresses.is_empty() {
+        return Err("bilinen adres yok; eş ağda henüz bulunamadı".into());
+    }
+    let mut failures = Vec::new();
     for address in addresses {
         let attempt = oc_transport::connect(*address, identity, trust, listen_port);
-        if let Ok(Ok(session)) = timeout(dial_timeout, attempt).await {
-            return Some((session, *address));
+        match timeout(dial_timeout, attempt).await {
+            Ok(Ok(session)) => return Ok((session, *address)),
+            Ok(Err(error)) => failures.push(format!("{address} ({error:#})")),
+            Err(_) => failures.push(format!("{address} (zaman aşımı)")),
         }
     }
-    None
+    Err(failures.join(", "))
 }
 
 fn disconnect(events: &mut Emitter, link: &mut Option<Link>, retry: &mut Retry, reason: &str) {
