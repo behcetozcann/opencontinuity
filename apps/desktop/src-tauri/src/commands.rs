@@ -4,7 +4,7 @@ use oc_engine::{ClipboardSource, Command, Engine, EngineConfig};
 use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::{AppState, View, diagnostics, spawn_engine, update_view};
+use crate::{AppState, View, diagnostics, spawn_engine, update_view, updater};
 
 #[tauri::command]
 pub fn get_view(state: State<'_, AppState>) -> View {
@@ -68,4 +68,14 @@ pub fn restart_engine(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
     update_view(&app, |view| view.engine_error = None);
     spawn_engine(app.clone(), engine, events);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn check_update(app: AppHandle) {
+    updater::check(&app).await;
+}
+
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    updater::install(&app).await
 }

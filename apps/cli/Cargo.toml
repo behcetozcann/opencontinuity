@@ -9,9 +9,9 @@ license.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 hex = "0.4"
-oc-clipboard = { version = "0.0.1", path = "../../crates/clipboard" }
-oc-engine = { version = "0.0.1", path = "../../crates/engine" }
-oc-pairing = { version = "0.0.1", path = "../../crates/pairing" }
+oc-clipboard = { path = "../../crates/clipboard" }
+oc-engine = { path = "../../crates/engine" }
+oc-pairing = { path = "../../crates/pairing" }
 sha2 = "0.11"
 tokio = { workspace = true, features = ["full"] }
 

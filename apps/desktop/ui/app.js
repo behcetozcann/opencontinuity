@@ -8,6 +8,8 @@ const $ = (id) => document.getElementById(id);
 let view = null;
 let searchingSince = null;
 let manualTimer = null;
+/** Bulunan ama henüz kurulmamış sürüm; kurulum hatasından sonra kartta kalır. */
+let pendingVersion = null;
 
 function showTab(name) {
   document.querySelectorAll(".tabs button").forEach((button) => {
@@ -109,6 +111,40 @@ function renderPairing(snapshot) {
   }
 }
 
+function renderUpdate(update) {
+  const state = update.state;
+  const busy = state === "downloading" || state === "installing";
+  $("update-card").hidden = !(state === "available" || busy || (state === "failed" && pendingVersion));
+  if (state === "available") pendingVersion = update.version;
+  if (state === "available" || state === "failed") {
+    $("update-title").textContent = `Yeni sürüm: v${pendingVersion}`;
+    $("update-detail").textContent = state === "failed" ? update.message : update.notes || "Kurulum birkaç saniye sürer, uygulama yeniden başlar.";
+  } else if (state === "downloading") {
+    $("update-title").textContent = `v${update.version} indiriliyor`;
+    $("update-detail").textContent = update.percent === null ? "İndiriliyor…" : `%${update.percent}`;
+  } else if (state === "installing") {
+    $("update-title").textContent = `v${update.version} kuruluyor`;
+    $("update-detail").textContent = "Uygulama birazdan yeniden başlayacak.";
+  }
+  $("update-progress").hidden = !busy;
+  $("update-bar").style.width = state === "installing" ? "100%" : `${update.percent || 0}%`;
+  $("update-install").hidden = busy;
+  $("update-install").disabled = false;
+  $("update-install").textContent = state === "failed" ? "Tekrar dene" : "Güncelle ve yeniden başlat";
+
+  const summaries = {
+    idle: "Henüz denetlenmedi.",
+    checking: "Denetleniyor…",
+    up_to_date: `Güncel. Son denetim: ${update.checked_at_ms ? new Date(update.checked_at_ms).toLocaleTimeString("tr-TR") : ""}`,
+    available: `Yeni sürüm hazır: v${update.version}`,
+    downloading: "Güncelleme indiriliyor…",
+    installing: "Güncelleme kuruluyor…",
+    failed: update.message,
+  };
+  $("update-summary").textContent = summaries[state];
+  $("update-check").disabled = state === "checking" || busy;
+}
+
 function render(next) {
   const wasPaired = view && view.snapshot.peer;
   view = next;
@@ -119,6 +155,7 @@ function render(next) {
   renderStatus(snapshot);
   renderPeer(snapshot);
   renderPairing(snapshot);
+  renderUpdate(view.update);
   $("paused").checked = snapshot.paused;
   $("paused").disabled = !snapshot.peer;
   $("own-name").textContent = snapshot.device_name || "—";
@@ -186,6 +223,11 @@ function bind() {
     invoke("restart_engine");
   });
   $("engine-log").addEventListener("click", () => showTab("about"));
+  $("update-check").addEventListener("click", () => invoke("check_update"));
+  $("update-install").addEventListener("click", () => {
+    $("update-install").disabled = true;
+    invoke("install_update").catch(() => {});
+  });
   $("log-copy").addEventListener("click", async () => {
     const text = await loadLog();
     if (text === null) return;

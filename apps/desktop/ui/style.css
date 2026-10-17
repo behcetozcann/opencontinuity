@@ -162,4 +162,7 @@ input:not([type]) {
 
 .log-result { margin: 10px 0 0; overflow-wrap: anywhere; }
 
+.progress { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin: 0 0 10px; }
+.progress div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+
 [hidden] { display: none !important; }

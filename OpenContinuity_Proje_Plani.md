@@ -132,7 +132,7 @@ Bugünkü uygulamalar çoğunlukla kullanıcıdan IP, port, sunucu kurulumu, hes
 ## 7. Açık kaynak stratejisi
 
 - Kod, protokol ve katkı yönergeleri herkese açık GitHub reposunda.
-- Lisans: **MIT**.
+- Lisans: **PolyForm Noncommercial 1.0.0** — kişisel ve ticari olmayan kullanım serbest; ticari kullanım için Behcet'ten ayrı lisans (17 Ekim 2026'da MIT'ten değiştirildi).
 - `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `PRIVACY.md` dosyaları.
 - Bağımlılık lisans taraması, güvenlik güncelleme politikası.
 - Windows ve macOS için otomatik derleme; sürüm yayınında imza ve macOS notarization süreci planla.
@@ -237,7 +237,7 @@ opencontinuity/
 
 - [x] **Hedef kitle:** Önce Behcet'in kendi kullanımı (kişisel + klinik); repo baştan herkese açık.
 - [x] **Çalışma adı:** OpenContinuity ile başlanır; ad/marka kontrolü yayın öncesi yapılır.
-- [x] **Lisans:** MIT.
+- [x] **Lisans:** PolyForm Noncommercial 1.0.0 + ticari lisans talep üzerine (MIT'ten değiştirildi).
 - [x] **Eşleştirme UX'i:** Altı haneli doğrulama kodu ana yol, QR ek seçenek.
 - [x] **Cihaz sayısı:** V0.1'de tek eş cihaz; çoklu cihaz Faz 2'de.
 - [x] **İçerik türü:** V0.1'de yalnız düz metin (UTF-8); HTML/RTF zengin metin sonraya.
@@ -250,9 +250,9 @@ opencontinuity/
 
 - [ ] Mevcut alternatiflerden (KDE Connect, LocalSend, ClipCascade vb.) farkımızın tek cümlelik tanımı (README için).
 - [ ] Test cihazları: Windows ve macOS sürümleri; aynı Wi-Fi mı, klinik ağında VLAN/misafir ağı ayrımı var mı?
-- [ ] Apple Developer hesabı (notarization için, yıllık 99 $) ve Windows kod imzalama sertifikası alınacak mı; ilk sürümlerde SmartScreen uyarısı kabul mü?
-- [ ] GitHub konumu: kişisel hesap mı, yeni organizasyon mu?
-- [ ] CI ve sürümleme düzeni.
+- [ ] Apple Developer hesabı (notarization için, yıllık 99 $) ve Windows kod imzalama sertifikası alınacak mı? İlk sürümler imzasız (SmartScreen/Gatekeeper uyarısı kabul).
+- [x] GitHub konumu: kişisel hesap, `behcetozcann/opencontinuity` (herkese açık).
+- [x] CI ve sürümleme: GitHub Actions (CI: macOS+Windows test; Release: `v*` etiketinde imzalı paket + `latest.json`, uygulama içi güncelleme).
 
 ---
 

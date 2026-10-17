@@ -6,6 +6,7 @@ use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 
+use crate::updater::{self, UpdateStatus};
 use crate::{AppState, View, show_window};
 
 const TRAY_ID: &str = "main";
@@ -13,6 +14,7 @@ const TRAY_ID: &str = "main";
 struct TrayItems {
     status: MenuItem<Wry>,
     pause: MenuItem<Wry>,
+    update: MenuItem<Wry>,
 }
 
 #[derive(Clone, Copy)]
@@ -26,10 +28,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let status = MenuItem::with_id(app, "status", "Başlatılıyor…", false, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "Duraklat", true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "OpenContinuity'yi aç", true, None::<&str>)?;
+    let update = MenuItem::with_id(app, "update", "Güncellemeleri denetle", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Çık", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&status, &PredefinedMenuItem::separator(app)?, &pause, &open, &PredefinedMenuItem::separator(app)?, &quit],
+        &[&status, &PredefinedMenuItem::separator(app)?, &pause, &open, &update, &PredefinedMenuItem::separator(app)?, &quit],
     )?;
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon(Look::Waiting))
@@ -47,7 +50,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
-    app.manage(TrayItems { status, pause });
+    app.manage(TrayItems { status, pause, update });
     Ok(())
 }
 
@@ -56,6 +59,15 @@ pub fn refresh(app: &AppHandle, view: &View) {
     let _ = items.status.set_text(status_text(view));
     let _ = items.pause.set_text(if view.snapshot.paused { "Devam et" } else { "Duraklat" });
     let _ = items.pause.set_enabled(view.snapshot.peer.is_some());
+    let (update_text, update_enabled) = match &view.update {
+        UpdateStatus::Available { version, .. } => (format!("v{version} sürümünü kur"), true),
+        UpdateStatus::Checking => ("Güncelleme denetleniyor…".to_owned(), false),
+        UpdateStatus::Downloading { percent: Some(percent), .. } => (format!("Güncelleme indiriliyor… %{percent}"), false),
+        UpdateStatus::Downloading { .. } | UpdateStatus::Installing { .. } => ("Güncelleniyor…".to_owned(), false),
+        UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Failed { .. } => ("Güncellemeleri denetle".to_owned(), true),
+    };
+    let _ = items.update.set_text(update_text);
+    let _ = items.update.set_enabled(update_enabled);
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         set_look(&tray, look(view));
         let _ = tray.set_tooltip(Some(format!("OpenContinuity — {}", status_text(view))));
@@ -70,6 +82,16 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
             state.engine().send(if paused { Command::Resume } else { Command::Pause });
         }
         "open" => show_window(app),
+        "update" => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if matches!(updater::current(&app), UpdateStatus::Available { .. }) {
+                    let _ = updater::install(&app).await;
+                } else {
+                    updater::check(&app).await;
+                }
+            });
+        }
         "quit" => {
             state.engine().send(Command::Shutdown);
             app.exit(0);

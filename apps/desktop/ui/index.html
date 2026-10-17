@@ -30,6 +30,12 @@
         <p id="status-detail" class="muted"></p>
       </div>
     </div>
+    <div id="update-card" class="card" hidden>
+      <h2 id="update-title"></h2>
+      <p id="update-detail" class="muted"></p>
+      <div id="update-progress" class="progress" hidden><div id="update-bar"></div></div>
+      <button id="update-install" class="primary wide">Güncelle ve yeniden başlat</button>
+    </div>
     <div class="card">
       <h2>Son aktarım</h2>
       <p id="last-transfer" class="muted">Henüz aktarım yok.</p>
@@ -107,6 +113,11 @@
         <span>Pano paylaşımını duraklat</span>
       </label>
       <p class="muted">Duraklatıldığında kopyaladıklarınız gönderilmez, karşıdan gelenler panoya yazılmaz.</p>
+    </div>
+    <div class="card">
+      <h2>Güncellemeler</h2>
+      <p id="update-summary" class="muted">Henüz denetlenmedi.</p>
+      <button id="update-check" class="secondary wide">Şimdi denetle</button>
     </div>
   </section>
 

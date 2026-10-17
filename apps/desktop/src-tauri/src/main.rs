@@ -4,6 +4,7 @@
 mod commands;
 mod diagnostics;
 mod tray;
+mod updater;
 
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -42,6 +43,7 @@ pub struct View {
     pairing_error: Option<String>,
     /// Motor durduysa (ör. port kullanımda) nedeni.
     engine_error: Option<String>,
+    update: updater::UpdateStatus,
 }
 
 pub struct AppState {
@@ -63,6 +65,7 @@ fn main() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_window(app)));
     }
     let app = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![AUTOSTART_ARG])))
         .invoke_handler(tauri::generate_handler![
             commands::get_view,
@@ -75,6 +78,8 @@ fn main() {
             commands::set_autostart,
             commands::app_version,
             commands::restart_engine,
+            commands::check_update,
+            commands::install_update,
             diagnostics::read_log,
             diagnostics::save_log_to_desktop,
             diagnostics::reveal_log,
@@ -88,8 +93,10 @@ fn main() {
             diagnostics::open(&config.config_dir);
             let (engine, handle, events) = Engine::new(config, ClipboardSource::System);
             app.manage(AppState { handle: Mutex::new(handle), view: Mutex::new(View::default()) });
+            app.manage(updater::PendingUpdate::default());
             tray::create(app.handle())?;
             spawn_engine(app.handle().clone(), engine, events);
+            updater::spawn_periodic_check(app.handle().clone());
             // Elle açılışta pencere görünür; girişte otomatik açılışta eş varsa yalnız simge.
             let autostarted = std::env::args().any(|arg| arg == AUTOSTART_ARG);
             if unpaired || !autostarted {
@@ -106,10 +113,13 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("OpenContinuity başlatılamadı");
-    app.run(|_app, event| {
-        if let RunEvent::ExitRequested { api, code: None, .. } = event {
-            api.prevent_exit();
-        }
+    app.run(|app, event| match event {
+        RunEvent::ExitRequested { api, code: None, .. } => api.prevent_exit(),
+        // macOS'ta çalışan uygulamanın simgesine tıklanınca ikinci süreç başlamaz,
+        // yalnız bu olay gelir; pencere açılmazsa uygulama "açılmıyor" görünür.
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => show_window(app),
+        _ => {}
     });
 }
 
