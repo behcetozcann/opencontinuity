@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Yalnız menü çubuğunda; Dock simgesi yok. -->
+  <key>LSUIElement</key>
+  <true/>
+  <!-- macOS yerel ağ izni: mDNS ile karşı cihazı bulmak ve ona bağlanmak için. -->
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>OpenContinuity, panoyu paylaşmak için aynı ağdaki eşleşmiş bilgisayarınızı bulur ve ona bağlanır.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_opencontinuity._tcp</string>
+  </array>
+</dict>
+</plist>

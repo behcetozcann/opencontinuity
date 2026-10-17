@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenContinuity</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="status" class="active">Durum</button>
+    <button role="tab" data-tab="devices">Cihazlar</button>
+    <button role="tab" data-tab="settings">Ayarlar</button>
+    <button role="tab" data-tab="about">Hakkında</button>
+  </nav>
+
+  <div id="engine-error" class="banner error" hidden></div>
+
+  <section id="tab-status" class="tab">
+    <div class="card status-card">
+      <span id="status-dot" class="dot"></span>
+      <div>
+        <h1 id="status-title">Başlatılıyor…</h1>
+        <p id="status-detail" class="muted"></p>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Son aktarım</h2>
+      <p id="last-transfer" class="muted">Henüz aktarım yok.</p>
+    </div>
+    <button id="status-pause" class="secondary wide" hidden>Duraklat</button>
+    <button id="status-pair" class="primary wide" hidden>Bir cihazla eşleştir</button>
+  </section>
+
+  <section id="tab-devices" class="tab" hidden>
+    <div id="peer-card" class="card" hidden>
+      <h2>Eşleşmiş cihaz</h2>
+      <p class="peer-name" id="peer-name"></p>
+      <dl class="facts">
+        <dt>Parmak izi</dt><dd id="peer-fingerprint" class="mono"></dd>
+        <dt>Son adres</dt><dd id="peer-address" class="mono"></dd>
+      </dl>
+      <div id="unpair-ask">
+        <button id="unpair" class="danger">Eşleşmeyi kaldır</button>
+      </div>
+      <div id="unpair-confirm" hidden>
+        <p>Bu cihazla pano paylaşımı durur. Karşı cihazda da eşleşmeyi kaldırmanız gerekir.</p>
+        <div class="row">
+          <button id="unpair-yes" class="danger">Kaldır</button>
+          <button id="unpair-no" class="secondary">Vazgeç</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pairing" class="card" hidden>
+      <div id="pair-idle">
+        <h2>Cihaz eşleştir</h2>
+        <p>Diğer bilgisayarda da OpenContinuity'yi açıp <b>Eşleştir</b>'e basın. İki cihaz aynı ağda olmalı.</p>
+        <p id="pair-error" class="banner error" hidden></p>
+        <button id="pair-start" class="primary wide">Eşleştir</button>
+      </div>
+      <div id="pair-searching" hidden>
+        <h2><span class="spinner"></span>Aranıyor…</h2>
+        <p>Aynı ağda eşleştirme bekleyen bilgisayar aranıyor. Diğer bilgisayarda da <b>Eşleştir</b>'e basın.</p>
+        <p class="muted">Bu bilgisayarın adresi: <span id="own-ip" class="mono">—</span></p>
+        <div id="manual" hidden>
+          <p>Bulunamıyor mu? Diğer bilgisayarın adresini yazın:</p>
+          <form id="manual-form" class="row">
+            <input id="manual-address" placeholder="192.168.1.82" autocomplete="off" spellcheck="false">
+            <button type="submit" class="secondary">Bağlan</button>
+          </form>
+        </div>
+        <button id="pair-cancel" class="secondary wide">Vazgeç</button>
+      </div>
+      <div id="pair-confirm" hidden>
+        <h2>Kodlar aynı mı?</h2>
+        <p><b id="confirm-peer"></b> bulundu. İki ekranda da aynı kod görünmeli:</p>
+        <p id="code" class="code"></p>
+        <div class="row">
+          <button id="code-yes" class="primary">Evet, aynı</button>
+          <button id="code-no" class="secondary">Hayır</button>
+        </div>
+      </div>
+      <div id="pair-waiting" hidden>
+        <h2><span class="spinner"></span>Onay bekleniyor</h2>
+        <p><b id="waiting-peer"></b> üzerinde de kodun onaylanması bekleniyor.</p>
+        <button id="waiting-cancel" class="secondary wide">Vazgeç</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tab" hidden>
+    <div class="card">
+      <label class="toggle">
+        <input type="checkbox" id="autostart">
+        <span>Bilgisayar açılınca başlat</span>
+      </label>
+      <p id="autostart-error" class="banner error" hidden></p>
+      <label class="toggle">
+        <input type="checkbox" id="paused">
+        <span>Pano paylaşımını duraklat</span>
+      </label>
+      <p class="muted">Duraklatıldığında kopyaladıklarınız gönderilmez, karşıdan gelenler panoya yazılmaz.</p>
+    </div>
+  </section>
+
+  <section id="tab-about" class="tab" hidden>
+    <div class="card">
+      <h2>OpenContinuity <span id="version" class="muted"></span></h2>
+      <p>Mac ve Windows arasında, yalnız yerel ağ üzerinden, şifreli pano paylaşımı. Bulut ya da hesap yok.</p>
+      <dl class="facts">
+        <dt>Bu cihaz</dt><dd id="own-name"></dd>
+        <dt>Parmak izi</dt><dd id="own-fingerprint" class="mono"></dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2>Gizlilik</h2>
+      <ul>
+        <li>Pano içeriği hiçbir kayda yazılmaz; yalnız boyut tutulur.</li>
+        <li>Parola yöneticilerinin gizli işaretli kopyaları hiç gönderilmez.</li>
+        <li>Karşı cihaz kapalıyken kopyalananlar biriktirilmez.</li>
+        <li>Parola, kod ya da hasta bilgisi kopyalayacaksanız paylaşımı duraklatabilirsiniz.</li>
+      </ul>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
