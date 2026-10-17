@@ -45,8 +45,8 @@ eşten Clip ─► core: event_id görüldü mü? ── evet ─► at
 
 ## Saklama
 
-- Cihaz anahtarı: OS anahtarlığı (Keychain / Credential Manager); imzasız CLI'da sorun çıkarsa PoC için 0600 izinli dosya.
-- Eş listesi: kullanıcı config dizininde `peers.json` (yalnız parmak izi, ad, son adres).
+- Cihaz anahtarı: PoC'de config dizininde 0600 izinli `identity.json`. İmzasız ve her derlemede değişen binary Keychain'de her seferinde onay isteyeceği için OS anahtarlığına Faz 1'de (imzalı uygulama) geçilir.
+- Eş: kullanıcı config dizininde `peer.json` (ad, parmak izi, son adres). Config dizini macOS'ta `~/Library/Application Support/org.OpenContinuity.OpenContinuity`, Windows'ta `%APPDATA%\OpenContinuity\OpenContinuity\config`.
 
 ## Bilinmeyenler (Faz 0'da ölçülecek)
 

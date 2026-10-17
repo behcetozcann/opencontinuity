@@ -1,4 +1,6 @@
 mod clip;
+mod config;
+mod pair;
 
 use clap::{Parser, Subcommand};
 
@@ -17,9 +19,20 @@ enum Command {
     ClipWatch,
     /// Panoya metin yazar.
     ClipSet { text: String },
+    /// Cihaz kimliğini ve eşleşmiş eşi gösterir.
+    Id,
+    /// Eşleştirir. `--addr` yoksa bekler ve bağlanılacak adresi yazar.
+    Pair {
+        /// Karşı cihazın adresi (IP veya IP:PORT).
+        #[arg(long)]
+        addr: Option<String>,
+    },
+    /// Eşleşmeyi kaldırır.
+    Unpair,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Info => {
             println!(
@@ -34,6 +47,9 @@ fn main() -> anyhow::Result<()> {
         }
         Command::ClipWatch => clip::watch()?,
         Command::ClipSet { text } => clip::set(&text)?,
+        Command::Id => pair::show_identity()?,
+        Command::Pair { addr } => pair::pair(addr).await?,
+        Command::Unpair => pair::unpair()?,
     }
     Ok(())
 }

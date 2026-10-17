@@ -13,6 +13,7 @@ async fn round_trip(message: &Message) -> Message {
 async fn every_message_type_round_trips() {
     let messages = [
         Message::Hello { version: VERSION, device_id: [1; 16], name: "Behçet'in Mac'i".into() },
+        Message::PairDecision { accepted: true },
         clip("merhaba"),
         Message::Ping { nonce: u64::MAX },
         Message::Pong { nonce: 0 },

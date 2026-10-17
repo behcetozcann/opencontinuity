@@ -15,6 +15,8 @@ pub type EventId = [u8; 16];
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Message {
     Hello { version: u16, device_id: DeviceId, name: String },
+    /// Eşleştirmede kullanıcının kararı; iki uç da `true` göndermeden eş kaydedilmez.
+    PairDecision { accepted: bool },
     Clip(ClipEvent),
     Ping { nonce: u64 },
     Pong { nonce: u64 },
