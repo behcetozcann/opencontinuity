@@ -4,11 +4,11 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 
 ## Otomatik (`cargo test --workspace`)
 
-- [ ] Codec: her mesaj tipi gidiş-dönüş; 5 MiB üstü çerçeve reddi; bozuk gövde reddi.
-- [ ] Metin: boş, Türkçe (`ğüşıöçĞÜŞİÖÇ`), emoji (birleşik ZWJ dahil), CRLF ve LF korunur, 4 MiB sınırı.
-- [ ] Core: iki sahte pano arasında 1.000 olay — döngü yok, son durum tutarlı.
-- [ ] Core: eşzamanlı kopyalama — yerel kopya gecikmiş uzak olayla ezilmez; eşitlikte belirleyici sonuç.
-- [ ] Core: aynı `event_id` iki kez uygulanmaz.
+- [x] Codec: her mesaj tipi gidiş-dönüş; 5 MiB üstü çerçeve reddi; bozuk gövde reddi.
+- [x] Metin: boş, Türkçe (`ğüşıöçĞÜŞİÖÇ`), emoji (birleşik ZWJ dahil), CRLF ve LF korunur, 4 MiB sınırı.
+- [x] Core: iki sahte pano arasında 1.000 olay — döngü yok, son durum tutarlı.
+- [x] Core: eşzamanlı kopyalama — yerel kopya gecikmiş uzak olayla ezilmez; eşitlikte belirleyici sonuç.
+- [x] Core: aynı `event_id` iki kez uygulanmaz.
 - [ ] Pairing: iki uçta SAS eşit; farklı exporter farklı SAS.
 - [ ] Transport (localhost): eşleşmiş iki örnek bağlanır; eşleşmemiş sertifika reddedilir; `unpair` sonrası reddedilir.
 - [ ] Heartbeat: eş yanıt vermeyince 15 sn içinde kopuk sayılır ve yeniden bağlanır.
@@ -33,3 +33,4 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 ## Bulgular
 
 - **macOS yazma yarışı (2026-10-17):** Yazan uygulama `clearContents` + `setString` yapınca sayaç yalnız bir kez artıyor; araya giren okuma boş pano görürse o kopya kaçıyordu (1/9). `read_after_change` boş görünce 100 ms sonra yeniden okuyor; sonra 20/20.
+- **Test gücü (2026-10-17):** Yankı bastırma devre dışı bırakılınca 3 core testi düşüyor (1.000 olay testi dahil); testler döngüyü gerçekten yakalıyor.
