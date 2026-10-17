@@ -1,0 +1,130 @@
+//! İki motoru aynı makinede, sahte panoyla ve mDNS'siz çalıştıran yardımcılar.
+
+use std::sync::mpsc as std_mpsc;
+use std::time::Duration;
+
+use oc_engine::{ClipboardPort, ClipboardSource, Command, Engine, EngineConfig, Event, Handle, PairingStage, Snapshot, Timing};
+use tokio::sync::mpsc;
+use tokio::time::timeout;
+
+pub const WAIT: Duration = Duration::from_secs(10);
+
+pub fn fast_timing() -> Timing {
+    Timing {
+        heartbeat_interval: Duration::from_millis(100),
+        heartbeat_timeout: Duration::from_millis(600),
+        handshake_timeout: Duration::from_secs(2),
+        dial_timeout: Duration::from_secs(1),
+        min_backoff: Duration::from_millis(50),
+        max_backoff: Duration::from_millis(400),
+    }
+}
+
+pub fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+}
+
+pub struct Node {
+    pub handle: Handle,
+    pub events: mpsc::UnboundedReceiver<Event>,
+    /// Sahte panoda "kullanıcı kopyaladı".
+    pub copy: mpsc::Sender<String>,
+    /// Motorun panoya yazdıkları.
+    pub written: std_mpsc::Receiver<String>,
+    pub port: u16,
+    pub dir: tempfile::TempDir,
+}
+
+impl Node {
+    pub fn start(name: &str) -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        Self::start_in(name, dir)
+    }
+
+    pub fn start_in(name: &str, dir: tempfile::TempDir) -> Self {
+        let port = free_port();
+        let (copy, local_texts) = mpsc::channel(8);
+        let (writes, written) = std_mpsc::channel();
+        let config = EngineConfig {
+            config_dir: dir.path().to_path_buf(),
+            device_name: name.to_owned(),
+            port,
+            discovery: false,
+            timing: fast_timing(),
+        };
+        let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_texts, writes }));
+        tokio::spawn(async move { engine.run().await.unwrap() });
+        Self { handle, events, copy, written, port, dir }
+    }
+
+    /// Koşulu sağlayan olay gelene kadar bekler; diğer olaylar atlanır.
+    pub async fn wait_for(&mut self, mut predicate: impl FnMut(&Event) -> bool) -> Event {
+        timeout(WAIT, async {
+            loop {
+                let event = self.events.recv().await.expect("motor durdu");
+                if predicate(&event) {
+                    return event;
+                }
+            }
+        })
+        .await
+        .expect("beklenen olay gelmedi")
+    }
+
+    pub async fn wait_state(&mut self, mut predicate: impl FnMut(&Snapshot) -> bool) -> Snapshot {
+        match self.wait_for(|event| matches!(event, Event::State(snapshot) if predicate(snapshot))).await {
+            Event::State(snapshot) => snapshot,
+            _ => unreachable!(),
+        }
+    }
+
+    pub async fn wait_connected(&mut self) {
+        self.wait_state(|snapshot| snapshot.connected_ip.is_some()).await;
+    }
+
+    /// Panoya yazılan sonraki metin.
+    pub async fn next_written(&self) -> String {
+        let deadline = std::time::Instant::now() + WAIT;
+        loop {
+            if let Ok(text) = self.written.try_recv() {
+                return text;
+            }
+            assert!(std::time::Instant::now() < deadline, "panoya yazılmadı");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// Belirtilen süre boyunca panoya hiçbir şey yazılmadığını doğrular.
+    pub async fn assert_nothing_written(&self, period: Duration) {
+        tokio::time::sleep(period).await;
+        assert!(self.written.try_recv().is_err(), "beklenmeyen pano yazımı");
+    }
+}
+
+pub async fn code_of(node: &mut Node) -> String {
+    match node.wait_state(|snapshot| matches!(snapshot.pairing, Some(PairingStage::Confirm { .. }))).await.pairing {
+        Some(PairingStage::Confirm { code, .. }) => code,
+        _ => unreachable!(),
+    }
+}
+
+/// `waiting` dinler, `joining` ona adresle bağlanır; iki uç da kodu onaylar.
+pub async fn pair(waiting: &mut Node, joining: &mut Node) {
+    waiting.handle.send(Command::StartPairing { address: None });
+    waiting.wait_state(|snapshot| matches!(snapshot.pairing, Some(PairingStage::Searching { .. }))).await;
+    joining.handle.send(Command::StartPairing { address: Some(format!("127.0.0.1:{}", waiting.port)) });
+    let (code_a, code_b) = (code_of(waiting).await, code_of(joining).await);
+    assert_eq!(code_a, code_b, "iki uçta kod aynı olmalı");
+    waiting.handle.send(Command::ConfirmCode(true));
+    joining.handle.send(Command::ConfirmCode(true));
+    waiting.wait_for(|event| matches!(event, Event::Paired { .. })).await;
+    joining.wait_for(|event| matches!(event, Event::Paired { .. })).await;
+}
+
+pub async fn paired_and_connected() -> (Node, Node) {
+    let (mut mac, mut windows) = (Node::start("mac"), Node::start("windows"));
+    pair(&mut mac, &mut windows).await;
+    mac.wait_connected().await;
+    windows.wait_connected().await;
+    (mac, windows)
+}

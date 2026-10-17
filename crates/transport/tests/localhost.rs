@@ -19,11 +19,14 @@ async fn pair_up(
     let server = server.clone();
     let accepting = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
-        accept(tcp, &server, server_trust).await
+        accept(tcp, &server, server_trust, SERVER_PORT).await
     });
-    let connected = connect(address, client, client_trust).await;
+    let connected = connect(address, client, client_trust, CLIENT_PORT).await;
     (accepting.await.unwrap(), connected)
 }
+
+const SERVER_PORT: u16 = 47800;
+const CLIENT_PORT: u16 = 47801;
 
 #[tokio::test]
 async fn pairing_both_sides_see_same_code() {
@@ -55,6 +58,8 @@ async fn pinned_peers_connect_and_exchange_text() {
     let (server, client) =
         pair_up(&mac, &windows, Trust::Pinned(windows.fingerprint()), Trust::Pinned(mac.fingerprint())).await;
     let (mut server, mut client) = (server.unwrap(), client.unwrap());
+    assert_eq!(server.peer_listen_port, CLIENT_PORT);
+    assert_eq!(client.peer_listen_port, SERVER_PORT);
 
     let text = "Türkçe ğüşıöç 🇹🇷\r\nikinci satır".to_owned();
     let message = Message::Clip(ClipEvent { event_id: [1; 16], lamport: 1, text });
@@ -77,4 +82,13 @@ async fn unknown_server_is_rejected_by_pinned_client() {
     let (server, client) = pair_up(&stranger, &windows, Trust::Pairing, Trust::Pinned(mac.fingerprint())).await;
     assert!(client.is_err(), "istemci sahte sunucuya bağlanmamalı");
     assert!(server.is_err());
+}
+
+/// Eşleşmesi kaldırılmış cihazın eski eşi, eşleştirme bekleyen tarafla oturum kuramaz.
+#[tokio::test]
+async fn pairing_and_sync_modes_do_not_mix() {
+    let (mac, windows) = (identity("Mac"), identity("Windows"));
+    let (server, client) = pair_up(&mac, &windows, Trust::Pairing, Trust::Pinned(mac.fingerprint())).await;
+    assert!(server.is_err(), "eşleştirme bekleyen taraf senkron modundaki eşi kabul etmemeli");
+    assert!(client.is_err());
 }

@@ -632,15 +632,10 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
- "directories",
- "gethostname",
  "hex",
  "oc-clipboard",
- "oc-core",
- "oc-discovery",
+ "oc-engine",
  "oc-pairing",
- "oc-protocol",
- "oc-transport",
  "sha2",
  "tokio",
 ]
@@ -672,6 +667,26 @@ dependencies = [
  "hex",
  "mdns-sd",
  "oc-pairing",
+ "tokio",
+]
+
+[[package]]
+name = "oc-engine"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "directories",
+ "gethostname",
+ "hex",
+ "oc-clipboard",
+ "oc-core",
+ "oc-discovery",
+ "oc-pairing",
+ "oc-protocol",
+ "oc-transport",
+ "serde",
+ "sha2",
+ "tempfile",
  "tokio",
 ]
 

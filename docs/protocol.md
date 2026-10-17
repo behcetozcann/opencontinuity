@@ -1,6 +1,6 @@
-# Protokol v2 (taslak)
+# Protokol v3 (taslak)
 
-v2 (2026-10-17): `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
+v3 (2026-10-17): `Hello`'ya `listen_port` ve `pairing` eklendi; eşleştirme modundaki uç yalnız eşleştirme modundaki uçla konuşur. v2: `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
 
 ## Taşıma
 
@@ -21,7 +21,7 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 
 | Mesaj | Alanlar | Not |
 |---|---|---|
-| `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String` | Bağlantıdaki ilk mesaj; sürüm uyuşmazsa bağlantı kapanır |
+| `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String`, `listen_port: u16`, `pairing: bool` | Bağlantıdaki ilk mesaj; sürüm ya da mod (`pairing`) uyuşmazsa bağlantı kapanır. `listen_port` karşı tarafın geri bağlanacağı port |
 | `PairDecision` | `accepted: bool` | Yalnız eşleştirmede; iki uç da `true` göndermeden eş kaydedilmez |
 | `Clock` | `lamport: u64` | `oc run` bağlantısında `Hello`'dan hemen sonra; alan taraf saatini `max(kendi, gelen)` yapar. Yeniden başlayan cihazın ilk kopyası böylece eski görünmez |
 | `Clip` | `event_id: [u8; 16]`, `lamport: u64`, `text: String` | Düz metin pano olayı |

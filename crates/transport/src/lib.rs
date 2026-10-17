@@ -24,6 +24,8 @@ pub struct Session {
     stream: Stream,
     pub peer_name: String,
     pub peer_fingerprint: Fingerprint,
+    /// Eşin dinlediği port; ona geri bağlanmak için.
+    pub peer_listen_port: u16,
     /// Bu TLS oturumuna özgü anahtar türevi; SAS kodunu oturuma bağlar.
     pub exporter: [u8; 32],
 }
@@ -42,7 +44,13 @@ impl Session {
     }
 }
 
-pub async fn connect(address: impl ToSocketAddrs, identity: &Identity, trust: Trust) -> anyhow::Result<Session> {
+/// `listen_port` bizim dinlediğimiz port; `Hello` ile eşe bildirilir.
+pub async fn connect(
+    address: impl ToSocketAddrs,
+    identity: &Identity,
+    trust: Trust,
+    listen_port: u16,
+) -> anyhow::Result<Session> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])?
@@ -56,10 +64,10 @@ pub async fn connect(address: impl ToSocketAddrs, identity: &Identity, trust: Tr
     let (fingerprint, exporter) = session_secrets(tls.get_ref().1, |out| {
         tls.get_ref().1.export_keying_material(out, EXPORTER_LABEL, None).map(|_| ())
     })?;
-    hello(TlsStream::from(tls), identity, fingerprint, exporter).await
+    hello(TlsStream::from(tls), identity, fingerprint, exporter, Local { trust, listen_port }).await
 }
 
-pub async fn accept(tcp: TcpStream, identity: &Identity, trust: Trust) -> anyhow::Result<Session> {
+pub async fn accept(tcp: TcpStream, identity: &Identity, trust: Trust, listen_port: u16) -> anyhow::Result<Session> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = ServerConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])?
@@ -70,7 +78,7 @@ pub async fn accept(tcp: TcpStream, identity: &Identity, trust: Trust) -> anyhow
     let (fingerprint, exporter) = session_secrets(tls.get_ref().1, |out| {
         tls.get_ref().1.export_keying_material(out, EXPORTER_LABEL, None).map(|_| ())
     })?;
-    hello(TlsStream::from(tls), identity, fingerprint, exporter).await
+    hello(TlsStream::from(tls), identity, fingerprint, exporter, Local { trust, listen_port }).await
 }
 
 fn session_secrets(
@@ -83,10 +91,28 @@ fn session_secrets(
     Ok((fingerprint_of(certificate), exporter))
 }
 
-async fn hello(mut stream: Stream, identity: &Identity, peer_fingerprint: Fingerprint, exporter: [u8; 32]) -> anyhow::Result<Session> {
-    let own = Message::Hello { version: VERSION, device_id: identity.device_id(), name: identity.name.clone() };
+struct Local {
+    trust: Trust,
+    listen_port: u16,
+}
+
+async fn hello(
+    mut stream: Stream,
+    identity: &Identity,
+    peer_fingerprint: Fingerprint,
+    exporter: [u8; 32],
+    local: Local,
+) -> anyhow::Result<Session> {
+    let own_pairing = local.trust == Trust::Pairing;
+    let own = Message::Hello {
+        version: VERSION,
+        device_id: identity.device_id(),
+        name: identity.name.clone(),
+        listen_port: local.listen_port,
+        pairing: own_pairing,
+    };
     write_message(&mut stream, &own).await?;
-    let Message::Hello { version, device_id, name } = read_message(&mut stream).await? else {
+    let Message::Hello { version, device_id, name, listen_port, pairing } = read_message(&mut stream).await? else {
         bail!("eş Hello ile başlamadı");
     };
     if version != VERSION {
@@ -95,7 +121,12 @@ async fn hello(mut stream: Stream, identity: &Identity, peer_fingerprint: Finger
     if device_id != device_id_of(&peer_fingerprint) {
         bail!("eşin cihaz kimliği sertifikasıyla uyuşmuyor");
     }
-    Ok(Session { stream, peer_name: name, peer_fingerprint, exporter })
+    // Eşleşmesi kaldırılmış cihazın eski eşi, eşleştirme bekleyen tarafa bağlanıp
+    // akışı bozmasın (ve tersi).
+    if pairing != own_pairing {
+        bail!("eş {} modunda", if pairing { "eşleştirme" } else { "senkron" });
+    }
+    Ok(Session { stream, peer_name: name, peer_fingerprint, peer_listen_port: listen_port, exporter })
 }
 
 fn certificate(identity: &Identity) -> CertificateDer<'static> {

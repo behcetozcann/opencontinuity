@@ -1,20 +1,15 @@
 use std::io::BufRead;
-use std::net::{IpAddr, SocketAddr, UdpSocket};
 
 use anyhow::bail;
-use oc_discovery::Discovery;
-use oc_pairing::{Identity, Peer, PeerStore, sas_code};
-use oc_protocol::Message;
-use oc_transport::{DEFAULT_PORT, Session, Trust};
-use tokio::net::TcpListener;
-
-use crate::config;
+use oc_engine::{ClipboardSource, Command, Engine, EngineConfig, Event, PairingStage};
+use oc_pairing::{Identity, PeerStore};
 
 pub fn show_identity() -> anyhow::Result<()> {
-    let identity = config::identity()?;
+    let config = EngineConfig::system()?;
+    let identity = Identity::load_or_create(&config.config_dir, &config.device_name)?;
     println!("Cihaz adı:  {}", identity.name);
     println!("Parmak izi: {}", hex::encode(identity.fingerprint()));
-    match PeerStore::new(&config::dir()?).load()? {
+    match PeerStore::new(&config.config_dir).load()? {
         Some(peer) => println!("Eş:         {} ({})", peer.name, &hex::encode(peer.fingerprint)[..16]),
         None => println!("Eş:         yok"),
     }
@@ -22,97 +17,53 @@ pub fn show_identity() -> anyhow::Result<()> {
 }
 
 pub async fn pair(address: Option<String>) -> anyhow::Result<()> {
-    let identity = config::identity()?;
-    let store = PeerStore::new(&config::dir()?);
-    if let Some(peer) = store.load()? {
+    let config = EngineConfig::system()?;
+    if let Some(peer) = PeerStore::new(&config.config_dir).load()? {
         bail!("zaten '{}' ile eşleşmiş; önce `oc unpair` çalıştır", peer.name);
     }
-    let (mut session, peer_address) = match address {
-        Some(address) => {
-            let address = with_default_port(&address);
-            (oc_transport::connect(address.as_str(), &identity, Trust::Pairing).await?, address)
+    let (engine, handle, mut events) = Engine::new(config, ClipboardSource::System);
+    let task = tokio::spawn(engine.run());
+    handle.send(Command::StartPairing { address });
+    while let Some(event) = events.recv().await {
+        match event {
+            Event::State(snapshot) => match snapshot.pairing {
+                Some(PairingStage::Searching { local_ip }) => {
+                    println!("Aynı ağda eşleştirme bekleyen cihaz aranıyor...");
+                    if let Some(ip) = local_ip {
+                        println!("Bulunamazsa diğer cihazda:  oc pair --addr {ip}");
+                    }
+                }
+                Some(PairingStage::Confirm { peer, code }) => {
+                    println!("\nEş: {peer}");
+                    println!("Doğrulama kodu:  {code}\n");
+                    let accepted = ask_yes_no("Karşı ekranda da aynı kod görünüyor mu? (e/h): ").await?;
+                    handle.send(Command::ConfirmCode(accepted));
+                }
+                Some(PairingStage::WaitingPeer { .. }) => println!("Karşı cihazın onayı bekleniyor..."),
+                None => {}
+            },
+            Event::Paired { peer } => {
+                println!("Eşleşti: {peer}");
+                handle.send(Command::Shutdown);
+            }
+            Event::PairingFailed { reason } => {
+                handle.send(Command::Shutdown);
+                task.await??;
+                bail!(reason);
+            }
+            _ => {}
         }
-        None => discover_or_listen(&identity).await?,
-    };
-
-    let code = sas_code(&identity.fingerprint(), &session.peer_fingerprint, &session.exporter);
-    println!("\nEş: {}", session.peer_name);
-    println!("Doğrulama kodu:  {code}\n");
-    let accepted = ask_yes_no("Karşı ekranda da aynı kod görünüyor mu? (e/h): ").await?;
-    session.send(&Message::PairDecision { accepted }).await?;
-    if !accepted {
-        bail!("eşleştirme reddedildi; hiçbir şey kaydedilmedi");
     }
-    println!("Karşı cihazın onayı bekleniyor...");
-    let Message::PairDecision { accepted: peer_accepted } = session.recv().await? else {
-        bail!("eş beklenmeyen mesaj gönderdi");
-    };
-    if !peer_accepted {
-        bail!("karşı cihaz reddetti; hiçbir şey kaydedilmedi");
-    }
-    store.save(&Peer {
-        name: session.peer_name.clone(),
-        fingerprint: session.peer_fingerprint,
-        last_address: Some(peer_address),
-    })?;
-    println!("Eşleşti: {}", session.peer_name);
-    Ok(())
+    task.await?
 }
 
 pub fn unpair() -> anyhow::Result<()> {
-    if PeerStore::new(&config::dir()?).remove()? {
-        println!("Eşleşme kaldırıldı.");
+    if PeerStore::new(&EngineConfig::system()?.config_dir).remove()? {
+        println!("Eşleşme kaldırıldı. Karşı cihazda da eşleşmeyi kaldırın.");
     } else {
         println!("Kayıtlı eş yok.");
     }
     Ok(())
-}
-
-/// Dinler ve mDNS ile yayın yapar; eşleştirme modundaki cihaz bulunursa
-/// parmak izi küçük olan taraf bağlanır, diğeri bağlantıyı kabul eder.
-async fn discover_or_listen(identity: &Identity) -> anyhow::Result<(Session, String)> {
-    let listener = TcpListener::bind(("0.0.0.0", DEFAULT_PORT)).await?;
-    let discovery = Discovery::start(&identity.name, &identity.fingerprint(), DEFAULT_PORT, true)?;
-    let mut discovered = discovery.browse()?;
-    let own_hex = hex::encode(identity.fingerprint());
-    println!("Aynı ağda `oc pair` çalıştıran cihaz aranıyor...");
-    if let Some(ip) = local_ip() {
-        println!("Bulunamazsa diğer cihazda:  oc pair --addr {ip}");
-    }
-    loop {
-        tokio::select! {
-            accepted = listener.accept() => {
-                let (tcp, remote) = accepted?;
-                let session = oc_transport::accept(tcp, identity, Trust::Pairing).await?;
-                return Ok((session, format!("{}:{DEFAULT_PORT}", remote.ip())));
-            }
-            Some(found) = discovered.recv() => {
-                if !found.pairing || found.fingerprint_hex < own_hex {
-                    continue;
-                }
-                for address in found.addresses {
-                    if let Ok(session) = oc_transport::connect(address, identity, Trust::Pairing).await {
-                        return Ok((session, address.to_string()));
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn with_default_port(address: &str) -> String {
-    if address.parse::<SocketAddr>().is_ok() {
-        address.to_owned()
-    } else {
-        format!("{address}:{DEFAULT_PORT}")
-    }
-}
-
-/// Varsayılan rotanın yerel adresi; UDP `connect` paket göndermez.
-fn local_ip() -> Option<IpAddr> {
-    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
-    socket.connect("192.0.2.1:9").ok()?;
-    Some(socket.local_addr().ok()?.ip())
 }
 
 async fn ask_yes_no(prompt: &str) -> anyhow::Result<bool> {

@@ -12,7 +12,13 @@ async fn round_trip(message: &Message) -> Message {
 #[tokio::test]
 async fn every_message_type_round_trips() {
     let messages = [
-        Message::Hello { version: VERSION, device_id: [1; 16], name: "Behçet'in Mac'i".into() },
+        Message::Hello {
+            version: VERSION,
+            device_id: [1; 16],
+            name: "Behçet'in Mac'i".into(),
+            listen_port: 47800,
+            pairing: true,
+        },
         Message::PairDecision { accepted: true },
         Message::Clock { lamport: 7 },
         clip("merhaba"),

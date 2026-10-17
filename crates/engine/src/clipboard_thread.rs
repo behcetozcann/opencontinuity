@@ -8,18 +8,16 @@ use oc_clipboard::Content;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
-use crate::run::log;
+use crate::ClipboardPort;
+use crate::events::Event;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
-pub struct ClipboardChannels {
-    /// Yerelde kopyalanan metinler.
-    pub local_texts: mpsc::Receiver<String>,
-    /// Panoya yazılacak uzak metinler.
-    pub writes: std_mpsc::Sender<String>,
-}
-
-pub fn spawn() -> anyhow::Result<ClipboardChannels> {
+/// Teşhis satırları (sayaç, sahip süreç, hash öneki) olay kanalına yazılır.
+pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPort> {
+    let log = move |message: String| {
+        let _ = events.send(Event::Diagnostic { message });
+    };
     let (local_sender, local_texts) = mpsc::channel(8);
     let (writes, write_receiver) = std_mpsc::channel::<String>();
     let (ready_sender, ready_receiver) = std_mpsc::channel();
@@ -76,7 +74,7 @@ pub fn spawn() -> anyhow::Result<ClipboardChannels> {
         }
     })?;
     ready_receiver.recv()??;
-    Ok(ClipboardChannels { local_texts, writes })
+    Ok(ClipboardPort { local_texts, writes })
 }
 
 /// İçeriği değil yalnız uzunluk ve hash önekini gösterir.

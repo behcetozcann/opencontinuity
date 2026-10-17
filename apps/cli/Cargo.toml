@@ -8,15 +8,10 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
-directories = "6"
-gethostname = "1"
 hex = "0.4"
 oc-clipboard = { version = "0.0.1", path = "../../crates/clipboard" }
-oc-core = { version = "0.0.1", path = "../../crates/core" }
-oc-discovery = { version = "0.0.1", path = "../../crates/discovery" }
+oc-engine = { version = "0.0.1", path = "../../crates/engine" }
 oc-pairing = { version = "0.0.1", path = "../../crates/pairing" }
-oc-protocol = { version = "0.0.1", path = "../../crates/protocol" }
-oc-transport = { version = "0.0.1", path = "../../crates/transport" }
 sha2 = "0.11"
 tokio = { workspace = true, features = ["full"] }
 

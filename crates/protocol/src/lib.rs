@@ -1,11 +1,11 @@
-//! Protokol v2: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
+//! Protokol v3: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
 //! Ayrıntı: `docs/protocol.md`.
 
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const VERSION: u16 = 2;
+pub const VERSION: u16 = 3;
 pub const MAX_FRAME_BYTES: usize = 5 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 
@@ -14,7 +14,9 @@ pub type EventId = [u8; 16];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Message {
-    Hello { version: u16, device_id: DeviceId, name: String },
+    /// `listen_port`: göndericinin dinlediği port (karşı taraf geri bağlanırken kullanır).
+    /// `pairing`: gönderici eşleştirme modunda mı; modlar uyuşmazsa bağlantı kapanır.
+    Hello { version: u16, device_id: DeviceId, name: String, listen_port: u16, pairing: bool },
     /// Eşleştirmede kullanıcının kararı; iki uç da `true` göndermeden eş kaydedilmez.
     PairDecision { accepted: bool },
     /// Bağlantı kurulunca gönderilir: göndericinin Lamport saati.

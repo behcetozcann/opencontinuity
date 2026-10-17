@@ -1,6 +1,4 @@
 mod clip;
-mod clipboard_thread;
-mod config;
 mod pair;
 mod run;
 

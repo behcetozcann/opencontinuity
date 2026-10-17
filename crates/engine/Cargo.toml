@@ -1,0 +1,28 @@
+[package]
+name = "oc-engine"
+description = "Senkron motoru: eşleştirme, bağlantı, pano döngüsü; olay/komut API'si (CLI ve masaüstü kabuğu kullanır)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+directories = "6"
+gethostname = "1"
+hex = "0.4"
+oc-clipboard = { path = "../clipboard" }
+oc-core = { path = "../core" }
+oc-discovery = { path = "../discovery" }
+oc-pairing = { path = "../pairing" }
+oc-protocol = { path = "../protocol" }
+oc-transport = { path = "../transport" }
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.11"
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true
