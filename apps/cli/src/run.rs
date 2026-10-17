@@ -80,7 +80,6 @@ pub async fn run() -> anyhow::Result<()> {
                         remember_address(&store, &mut peer, &mut addresses, address.ip())?;
                         log(format!("Bağlandı: {} ({})", session.peer_name, address.ip()));
                         active = activate(session, &state).await;
-                        backoff = MIN_BACKOFF;
                     }
                     None => {
                         next_dial = tokio::time::Instant::now() + backoff;
@@ -99,7 +98,7 @@ pub async fn run() -> anyhow::Result<()> {
                 match active.as_mut() {
                     Some(session) => match session.send(&Message::Clip(event)).await {
                         Ok(()) => log(format!("Gönderildi: {bytes} bayt (lamport {lamport})")),
-                        Err(error) => disconnect(&mut active, &mut next_dial, &error.to_string()),
+                        Err(error) => disconnect(&mut active, &mut next_dial, &mut backoff, &error.to_string()),
                     },
                     None => log("Eş bağlı değil; kopya gönderilmedi.".into()),
                 }
@@ -113,23 +112,28 @@ pub async fn run() -> anyhow::Result<()> {
                         log(format!("Alındı ama uygulanmadı ({} bayt): yerel kopya daha yeni ya da tekrar.", event.text.len()));
                     }
                 }
-                Ok(Message::Clock { lamport }) => state.observe_peer_clock(lamport),
+                Ok(Message::Clock { lamport }) => {
+                    state.observe_peer_clock(lamport);
+                    // Bağlantı ancak eşten ilk geçerli mesaj gelince sağlıklı sayılır;
+                    // el sıkışmadan hemen sonra kopan bağlantı beklemeyi sıfırlamaz.
+                    backoff = MIN_BACKOFF;
+                }
                 Ok(Message::Ping { nonce }) => {
                     if let Some(session) = active.as_mut()
                         && let Err(error) = session.send(&Message::Pong { nonce }).await
                     {
-                        disconnect(&mut active, &mut next_dial, &error.to_string());
+                        disconnect(&mut active, &mut next_dial, &mut backoff, &error.to_string());
                     }
                 }
                 Ok(_) => {}
-                Err(error) => disconnect(&mut active, &mut next_dial, &error.to_string()),
+                Err(error) => disconnect(&mut active, &mut next_dial, &mut backoff, &error.to_string()),
             },
             _ = heartbeat.tick() => {
                 let Some(session) = active.as_mut() else { continue };
                 if session.last_seen.elapsed() > HEARTBEAT_TIMEOUT {
-                    disconnect(&mut active, &mut next_dial, "eş 15 sn yanıt vermedi");
+                    disconnect(&mut active, &mut next_dial, &mut backoff, "eş 15 sn yanıt vermedi");
                 } else if let Err(error) = session.send(&Message::Ping { nonce: 0 }).await {
-                    disconnect(&mut active, &mut next_dial, &error.to_string());
+                    disconnect(&mut active, &mut next_dial, &mut backoff, &error.to_string());
                 }
             }
         }
@@ -203,11 +207,12 @@ async fn dial(addresses: &[SocketAddr], identity: &oc_pairing::Identity, trust: 
     None
 }
 
-fn disconnect(active: &mut Option<Active>, next_dial: &mut tokio::time::Instant, reason: &str) {
+fn disconnect(active: &mut Option<Active>, next_dial: &mut tokio::time::Instant, backoff: &mut Duration, reason: &str) {
     if active.take().is_some() {
         log(format!("Bağlantı koptu: {reason}"));
     }
-    *next_dial = tokio::time::Instant::now() + MIN_BACKOFF;
+    *next_dial = tokio::time::Instant::now() + *backoff;
+    *backoff = (*backoff * 2).min(MAX_BACKOFF);
 }
 
 fn remember_address(store: &PeerStore, peer: &mut Peer, addresses: &mut Vec<SocketAddr>, ip: IpAddr) -> anyhow::Result<()> {
