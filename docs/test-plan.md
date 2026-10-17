@@ -21,14 +21,14 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 | 2 | macOS'ta pano okuma gizlilik uyarısı çıkıyor mu? (sonuç not edilir) | [!] Terminal'den: uyarı yok, `accessBehavior=always-allow`. Ayrı uygulama paketinde (Faz 1) yeniden ölçülecek | — |
 | 3 | Parola yöneticisinden kopyalanan parola gönderilmez | [!] Concealed/Transient tipleri simülasyonla tespit edildi; gerçek parola yöneticisiyle denenmedi | [x] Chrome Parola Yöneticisi kopyası "gizli" algılandı |
 | 4 | IP girmeden birbirini bulur | [ ] | [ ] |
-| 5 | 6 haneli kod iki ekranda aynı; reddedilince eşleşme kaydedilmez | [ ] | [ ] |
+| 5 | 6 haneli kod iki ekranda aynı; reddedilince eşleşme kaydedilmez | [x] kod 957 010 iki ekranda aynı; red senaryosu yerelde iki örnekle | [x] |
 | 6 | Mac `Cmd+C` → Windows `Ctrl+V` | [ ] | [ ] |
 | 7 | Windows `Ctrl+C` → Mac `Cmd+V` | [ ] | [ ] |
 | 8 | Türkçe + emoji + çok satırlı metin bozulmaz | [x] yerel gidiş-dönüş (eşler arası değil) | [ ] |
 | 9 | Wi-Fi kapat/aç sonrası kendiliğinden toparlanır (süre not edilir) | [ ] | [ ] |
 | 10 | Uyku/uyanma sonrası toparlanır (süre not edilir) | [ ] | [ ] |
 | 11 | Yeniden başlatma sonrası tekrar eşleştirme istemez | [ ] | [ ] |
-| 12 | Elle adres (`--addr`) ile eşleştirme çalışır | [ ] | [ ] |
+| 12 | Elle adres (`--addr`) ile eşleştirme çalışır | [x] dinleyen taraf | [x] bağlanan taraf |
 
 ## Bulgular
 
