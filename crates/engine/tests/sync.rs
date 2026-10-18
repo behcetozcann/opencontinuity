@@ -3,7 +3,7 @@ mod common;
 use std::time::Duration;
 
 use common::{Node, code_of, pair, paired_and_connected, text};
-use oc_engine::{Command, ContentKind, Event, PairingStage, Payload};
+use oc_engine::{Clip, Command, ContentKind, Event, PairingStage};
 use oc_pairing::{Identity, Peer, PeerStore};
 use oc_protocol::Message;
 use oc_transport::Trust;
@@ -30,7 +30,7 @@ async fn large_image_syncs_in_chunks_without_echo() {
     let (mut mac, mut windows) = paired_and_connected().await;
     let mut png = oc_protocol::PNG_SIGNATURE.to_vec();
     png.extend((0..oc_protocol::MAX_FRAME_BYTES + 300_000).map(|index| (index % 253) as u8));
-    let image = Payload::Png(png);
+    let image = Clip::Png(png);
 
     mac.copy.send(image.clone()).await.unwrap();
     assert_eq!(windows.next_written().await, image);

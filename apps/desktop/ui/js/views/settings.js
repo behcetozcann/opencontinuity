@@ -49,6 +49,11 @@ export function bindSettings() {
     if (error) showError($("autostart-error"), `Başlangıç ayarı değiştirilemedi: ${error}`);
     loadAutostart();
   });
+  $("open-files").addEventListener("click", async () => {
+    const error = await run("open_files_dir");
+    if (error) showError($("open-files-error"), `Klasör açılamadı: ${error}`);
+    else $("open-files-error").hidden = true;
+  });
   $("unpair").addEventListener("click", () => {
     $("unpair-ask").hidden = true;
     $("unpair-confirm").hidden = false;

@@ -32,6 +32,11 @@ pub struct Assembler {
 }
 
 impl Assembler {
+    /// `TransferCancel` geldi: yarım görsel atılır.
+    pub fn cancel(&mut self) {
+        self.pending = None;
+    }
+
     /// Tamamlanan mesajı döner; görsel parçası bekleniyorsa `None`.
     pub fn push(&mut self, message: Message) -> anyhow::Result<Option<Message>> {
         match message {

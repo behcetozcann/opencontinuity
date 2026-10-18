@@ -7,14 +7,14 @@ use anyhow::{Context as _, anyhow};
 use oc_core::SyncState;
 use oc_discovery::Discovery;
 use oc_pairing::{Identity, Peer, PeerStore, device_id_of};
-use oc_protocol::{ContentKind, Message};
+use oc_protocol::Message;
 use oc_transport::{Session, Trust};
 use tokio::net::TcpListener;
 use tokio::time::{Instant, interval, sleep_until, timeout};
 
 use crate::events::{Emitter, Event, PeerSummary};
-use crate::link::{Link, next_incoming};
-use crate::{Command, Context, Flow, Timing, next_found};
+use crate::link::{Link, LinkEvent, next_event};
+use crate::{Command, Context, Flow, Timing, files, next_found, transfer};
 
 pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> {
     let port = context.config.port;
@@ -36,6 +36,7 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
     };
     let mut discovered = discovery.as_ref().map(Discovery::browse).transpose()?;
 
+    files::clean_partials(&context.config.files_dir);
     let mut state = SyncState::new(context.identity.device_id());
     let peer_device_id = device_id_of(&peer.fingerprint);
     let peer_hex = hex::encode(peer.fingerprint);
@@ -97,73 +98,45 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
                 }
             }
             copy = context.clipboard.local_copies.recv() => {
-                let payload = copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
-                // Duraklatılmışken saat ilerletilmez; yoksa eşin sonraki kopyaları eski görünürdü.
-                if context.events.snapshot().paused {
-                    continue;
-                }
-                let (content, bytes, limit) = (payload.kind(), payload.len(), payload.max_bytes());
-                if bytes > limit {
-                    context.events.emit(Event::TooLarge { content, bytes, limit });
-                    continue;
-                }
-                let Some(event) = state.on_local(payload) else { continue };
-                let lamport = event.lamport;
-                let Some(active) = link.as_mut() else {
-                    context.events.emit(Event::Skipped { reason: "Eş bağlı değil; kopya gönderilmedi.".into() });
-                    continue;
-                };
-                if content == ContentKind::Image {
-                    context.events.emit(Event::Sending { content, bytes });
-                }
-                match active.send(Message::Clip(event)).await {
-                    Ok(()) => context.events.emit(Event::Sent { content, bytes, lamport }),
-                    Err(error) => disconnect(&mut context.events, &mut link, &mut retry, &error.to_string()),
+                let copy = copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
+                if let Err(error) = transfer::send_local(context, &mut state, &mut link, copy).await {
+                    disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
                 }
             }
-            message = next_incoming(&mut link) => match message {
-                Ok(Message::Clip(event)) => {
-                    let (content, bytes) = (event.payload.kind(), event.payload.len());
-                    if context.events.snapshot().paused {
-                        // Uygulanmasa da saat ilerler; yoksa devamdaki ilk yerel kopya eşin
-                        // son kopyasıyla aynı lamport'u alıp reddedilebilirdi.
-                        state.observe_peer_clock(event.lamport);
-                        context.events.emit(Event::Skipped { reason: format!("Duraklatıldı; gelen kopya ({bytes} bayt) uygulanmadı.") });
-                    } else if state.on_remote(&peer_device_id, &event) {
-                        context.events.emit(Event::Received { content, bytes, lamport: event.lamport });
-                        context.clipboard.writes.send(event.payload).map_err(|_| anyhow!("pano iş parçacığı durdu"))?;
-                    } else {
-                        let reason = format!("Alındı ama uygulanmadı ({bytes} bayt): yerel kopya daha yeni ya da tekrar.");
-                        context.events.emit(Event::Skipped { reason });
+            event = next_event(&mut link) => match event {
+                LinkEvent::Completed(completion) => {
+                    if let Some(reason) = transfer::on_completion(context, completion) {
+                        disconnect(&mut context.events, &mut link, &mut retry, &reason);
                     }
                 }
-                Ok(Message::ImageStart { total_bytes, .. }) => {
-                    if !context.events.snapshot().paused {
-                        context.events.emit(Event::Receiving { content: ContentKind::Image, bytes: total_bytes as usize });
+                LinkEvent::Incoming(message) => match message {
+                    Ok(Message::Clip(event)) => transfer::apply_remote(context, &mut state, &peer_device_id, event)?,
+                    Ok(notice @ (Message::ImageStart { .. } | Message::FilesStart { .. } | Message::TransferCancel)) => {
+                        transfer::on_notice(context, &notice);
                     }
-                }
-                Ok(Message::Clock { lamport }) => {
-                    state.observe_peer_clock(lamport);
-                    // Bağlantı ancak eşten ilk geçerli mesaj gelince sağlıklı sayılır;
-                    // el sıkışmadan hemen sonra kopan bağlantı beklemeyi sıfırlamaz.
-                    retry.healthy();
-                }
-                Ok(Message::Ping { nonce }) => {
-                    if let Some(active) = link.as_mut()
-                        && let Err(error) = active.send(Message::Pong { nonce }).await
-                    {
-                        disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
+                    Ok(Message::Clock { lamport }) => {
+                        state.observe_peer_clock(lamport);
+                        // Bağlantı ancak eşten ilk geçerli mesaj gelince sağlıklı sayılır;
+                        // el sıkışmadan hemen sonra kopan bağlantı beklemeyi sıfırlamaz.
+                        retry.healthy();
                     }
-                }
-                Ok(_) => {}
-                Err(error) => disconnect(&mut context.events, &mut link, &mut retry, &error.to_string()),
+                    Ok(Message::Ping { nonce }) => {
+                        if let Some(active) = link.as_mut()
+                            && let Err(error) = active.post(Message::Pong { nonce })
+                        {
+                            disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(error) => disconnect(&mut context.events, &mut link, &mut retry, &error.to_string()),
+                },
             },
             _ = heartbeat.tick() => {
                 let Some(active) = link.as_mut() else { continue };
                 if active.last_seen().elapsed() > timing.heartbeat_timeout {
                     let reason = format!("eş {} sn yanıt vermedi", timing.heartbeat_timeout.as_secs_f32());
                     disconnect(&mut context.events, &mut link, &mut retry, &reason);
-                } else if let Err(error) = active.send(Message::Ping { nonce: 0 }).await {
+                } else if let Err(error) = active.post(Message::Ping { nonce: 0 }) {
                     disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
                 }
             }
@@ -181,7 +154,7 @@ async fn activate(
     state: &SyncState,
 ) -> anyhow::Result<Option<Link>> {
     remember_address(&context.store, peer, addresses, address)?;
-    let mut link = Link::start(session, context.config.timing.heartbeat_timeout);
+    let mut link = Link::start(session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone());
     if let Err(error) = link.send(Message::Clock { lamport: state.clock() }).await {
         context.events.diagnostic(format!("Saat gönderilemedi, bağlantı kapatıldı: {error}"));
         return Ok(None);

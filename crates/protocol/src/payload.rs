@@ -1,7 +1,7 @@
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
 
-use crate::{MAX_IMAGE_BYTES, MAX_TEXT_BYTES};
+use crate::{FileList, MAX_FILES_BYTES, MAX_IMAGE_BYTES, MAX_TEXT_BYTES};
 
 pub const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n'];
 
@@ -11,6 +11,8 @@ pub enum Payload {
     Text(String),
     /// PNG dosyasının baytları.
     Png(Vec<u8>),
+    /// Dosya/klasör listesi; içerik ayrıca `FileChunk`'larla akar.
+    Files(FileList),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -18,35 +20,45 @@ pub enum Payload {
 pub enum ContentKind {
     Text,
     Image,
+    Files,
 }
 
 impl Payload {
-    pub fn as_bytes(&self) -> &[u8] {
+    /// Metin ve görselde içerik baytları, dosyada toplam boyut.
+    pub fn len(&self) -> u64 {
         match self {
-            Payload::Text(text) => text.as_bytes(),
-            Payload::Png(png) => png,
+            Payload::Text(text) => text.len() as u64,
+            Payload::Png(png) => png.len() as u64,
+            Payload::Files(files) => files.total_bytes(),
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.as_bytes().len()
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.as_bytes().is_empty()
+    /// Yankı karşılaştırması için özetlenen baytlar: dosyada liste (ad, boyut, yapı).
+    pub fn digest_input(&self) -> std::borrow::Cow<'_, [u8]> {
+        match self {
+            Payload::Text(text) => text.as_bytes().into(),
+            Payload::Png(png) => png.as_slice().into(),
+            Payload::Files(files) => postcard::to_stdvec(files).unwrap_or_default().into(),
+        }
     }
 
     pub fn kind(&self) -> ContentKind {
         match self {
             Payload::Text(_) => ContentKind::Text,
             Payload::Png(_) => ContentKind::Image,
+            Payload::Files(_) => ContentKind::Files,
         }
     }
 
-    pub fn max_bytes(&self) -> usize {
+    pub fn max_bytes(&self) -> u64 {
         match self {
-            Payload::Text(_) => MAX_TEXT_BYTES,
-            Payload::Png(_) => MAX_IMAGE_BYTES,
+            Payload::Text(_) => MAX_TEXT_BYTES as u64,
+            Payload::Png(_) => MAX_IMAGE_BYTES as u64,
+            Payload::Files(_) => MAX_FILES_BYTES,
         }
     }
 
@@ -54,12 +66,11 @@ impl Payload {
         if self.len() > self.max_bytes() {
             bail!("içerik sınırı aşıldı: {} bayt", self.len());
         }
-        if let Payload::Png(png) = self
-            && !png.starts_with(&PNG_SIGNATURE)
-        {
-            bail!("görsel PNG değil");
+        match self {
+            Payload::Png(png) if !png.starts_with(&PNG_SIGNATURE) => bail!("görsel PNG değil"),
+            Payload::Files(files) => files.validate(),
+            _ => Ok(()),
         }
-        Ok(())
     }
 }
 

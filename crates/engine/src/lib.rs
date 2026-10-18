@@ -8,9 +8,12 @@
 mod clipboard_thread;
 pub mod config;
 mod events;
+mod files;
 mod link;
 mod pairing;
 mod sync_loop;
+mod transfer;
+mod writer;
 
 use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
@@ -22,7 +25,7 @@ use oc_pairing::{Identity, PeerStore};
 use tokio::sync::mpsc;
 
 pub use events::{Event, PairingStage, PeerSummary, Snapshot};
-pub use oc_protocol::{ContentKind, Payload};
+pub use oc_protocol::ContentKind;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Timing {
@@ -54,6 +57,8 @@ pub struct EngineConfig {
     /// mDNS yayını ve arama (testlerde kapalı).
     pub discovery: bool,
     pub timing: Timing,
+    /// Gelen dosyaların kaydedildiği klasör (İndirilenler/OpenContinuity).
+    pub files_dir: PathBuf,
 }
 
 impl EngineConfig {
@@ -65,16 +70,26 @@ impl EngineConfig {
             port: config::port()?,
             discovery: true,
             timing: Timing::default(),
+            files_dir: config::files_dir()?,
         })
     }
 }
 
+/// Bu bilgisayarın panosundaki içerik. Dosyalar yerel yollardır; karşıya
+/// liste + içerik olarak gider, gelenler `files_dir` altındaki yollarla yazılır.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Clip {
+    Text(String),
+    Png(Vec<u8>),
+    Files(Vec<PathBuf>),
+}
+
 /// Panoyla konuşan kanallar; testler sahte pano için kendisi kurar.
 pub struct ClipboardPort {
-    /// Yerelde kopyalanan metin ve görseller.
-    pub local_copies: mpsc::Receiver<Payload>,
+    /// Yerelde kopyalananlar.
+    pub local_copies: mpsc::Receiver<Clip>,
     /// Panoya yazılacak uzak içerik.
-    pub writes: std_mpsc::Sender<Payload>,
+    pub writes: std_mpsc::Sender<Clip>,
 }
 
 pub enum ClipboardSource {

@@ -24,14 +24,26 @@ pub struct Transfer {
     /// "sent" | "received" | "too_large" (sınırı aştığı için gönderilmedi)
     direction: &'static str,
     content: ContentKind,
-    bytes: usize,
+    bytes: u64,
+    /// Dosyada kopyalanan üst düzey öğe sayısı.
+    items: usize,
     at_ms: u64,
+    /// Gelen dosyaların klasörü; arayüz "Göster" der. Yol arayüzden geri alınmaz.
+    #[serde(skip)]
+    saved_to: Option<std::path::PathBuf>,
+    can_reveal: bool,
 }
 
 impl Transfer {
-    fn now(direction: &'static str, content: ContentKind, bytes: usize) -> Self {
+    fn now(direction: &'static str, content: ContentKind, bytes: u64, items: usize) -> Self {
         let at_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_millis() as u64).unwrap_or(0);
-        Self { direction, content, bytes, at_ms }
+        Self { direction, content, bytes, items, at_ms, saved_to: None, can_reveal: false }
+    }
+
+    fn saved_to(mut self, dir: Option<std::path::PathBuf>) -> Self {
+        self.can_reveal = dir.is_some();
+        self.saved_to = dir;
+        self
     }
 }
 
@@ -53,6 +65,10 @@ pub struct View {
 }
 
 impl View {
+    pub fn saved_folder(&self, at_ms: u64) -> Option<std::path::PathBuf> {
+        self.recent_transfers.iter().find(|transfer| transfer.at_ms == at_ms)?.saved_to.clone()
+    }
+
     fn record_transfer(&mut self, transfer: Transfer) {
         self.in_flight = None;
         self.recent_transfers.insert(0, transfer);
@@ -95,6 +111,8 @@ fn main() {
             commands::install_update,
             commands::open_local_network_settings,
             commands::open_project_page,
+            commands::reveal_transfer,
+            commands::open_files_dir,
             diagnostics::read_log,
             diagnostics::save_log_to_desktop,
             diagnostics::reveal_log,
@@ -172,16 +190,20 @@ pub fn spawn_engine(app: AppHandle, engine: Engine, mut events: UnboundedReceive
 fn apply_event(app: &AppHandle, event: Event) {
     match event {
         Event::State(snapshot) => update_view(app, |view| view.snapshot = snapshot),
-        Event::Sending { content, bytes } => update_view(app, |view| view.in_flight = Some(Transfer::now("sent", content, bytes))),
-        Event::Receiving { content, bytes } => {
-            update_view(app, |view| view.in_flight = Some(Transfer::now("received", content, bytes)))
+        Event::Sending { content, bytes, items } => {
+            update_view(app, |view| view.in_flight = Some(Transfer::now("sent", content, bytes, items)))
         }
-        Event::Sent { content, bytes, .. } => update_view(app, |view| view.record_transfer(Transfer::now("sent", content, bytes))),
-        Event::Received { content, bytes, .. } => {
-            update_view(app, |view| view.record_transfer(Transfer::now("received", content, bytes)))
+        Event::Receiving { content, bytes, items } => {
+            update_view(app, |view| view.in_flight = Some(Transfer::now("received", content, bytes, items)))
+        }
+        Event::Sent { content, bytes, items, .. } => {
+            update_view(app, |view| view.record_transfer(Transfer::now("sent", content, bytes, items)))
+        }
+        Event::Received { content, bytes, items, saved_to, .. } => {
+            update_view(app, |view| view.record_transfer(Transfer::now("received", content, bytes, items).saved_to(saved_to)))
         }
         Event::TooLarge { content, bytes, .. } => {
-            update_view(app, |view| view.record_transfer(Transfer::now("too_large", content, bytes)))
+            update_view(app, |view| view.record_transfer(Transfer::now("too_large", content, bytes, 1)))
         }
         Event::Skipped { .. } | Event::Disconnected { .. } => update_view(app, |view| view.in_flight = None),
         Event::PairingFailed { reason } => update_view(app, |view| view.pairing_error = Some(reason)),

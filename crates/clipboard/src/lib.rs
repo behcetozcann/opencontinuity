@@ -1,4 +1,5 @@
-//! Sistem panosuna düz metin ve görsel (PNG) okuma/yazma, değişiklik algılama.
+//! Sistem panosuna düz metin, görsel (PNG) ve dosya listesi okuma/yazma,
+//! değişiklik algılama.
 //!
 //! Değişiklik algılama her iki platformda da ucuz bir sayaçla yapılır
 //! (macOS `changeCount`, Windows `GetClipboardSequenceNumber`); içerik
@@ -10,12 +11,17 @@ mod dib;
 mod macos;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+mod windows_memory;
 
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n'];
 
 /// Panodaki içeriğin senkronizasyon açısından anlamı.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Content {
+    /// Finder/Gezgin'de kopyalanan dosya ve klasörler. Dosya kopyası adını metin,
+    /// simgesini görsel olarak da koyar; bu yüzden önce dosyalara bakılır.
+    Files(Vec<std::path::PathBuf>),
     /// Panoda metin de görsel de varsa metin seçilir (ofis uygulamaları metnin
     /// görüntüsünü de koyar).
     Text(String),
@@ -33,6 +39,8 @@ pub trait Clipboard {
     fn read(&self) -> anyhow::Result<Content>;
     fn write_text(&self, text: &str) -> anyhow::Result<()>;
     fn write_png(&self, png: &[u8]) -> anyhow::Result<()>;
+    /// Yapıştırınca Finder/Gezgin bu dosyaları hedefe kopyalar.
+    fn write_files(&self, paths: &[std::path::PathBuf]) -> anyhow::Result<()>;
     /// Teşhis için panoyu kimin doldurduğu ve hangi biçimler olduğu; içerik içermez.
     fn describe_source(&self) -> String;
 }

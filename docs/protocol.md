@@ -1,6 +1,6 @@
-# Protokol v4 (taslak)
+# Protokol v5 (taslak)
 
-v4 (2026-10-18): `Clip` metin ya da PNG taşır (`payload`); görseller `ImageStart` + `ImageChunk` parçalarıyla gider. v3 (2026-10-17): `Hello`'ya `listen_port` ve `pairing` eklendi; eşleştirme modundaki uç yalnız eşleştirme modundaki uçla konuşur. v2: `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
+v5 (2026-10-18): dosya/klasör aktarımı (`FilesStart` + `FileChunk`), süren aktarımı bırakan `TransferCancel`. v4 (2026-10-18): `Clip` metin ya da PNG taşır (`payload`); görseller `ImageStart` + `ImageChunk` parçalarıyla gider. v3 (2026-10-17): `Hello`'ya `listen_port` ve `pairing` eklendi; eşleştirme modundaki uç yalnız eşleştirme modundaki uçla konuşur. v2: `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
 
 ## Taşıma
 
@@ -16,6 +16,7 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 
 - Gövde en fazla **5 MiB**; aşan çerçeve bağlantıyı kapatır.
 - Metin en fazla **4 MiB** (UTF-8 bayt).
+- Dosya kopyası toplam en fazla **500 MiB**, en çok 5.000 girdi, yol ≤ 512 bayt. İçerik diskten okunup diske yazılarak akar; bellekte tutulmaz.
 - Görsel en fazla **32 MiB** (PNG bayt), en çok **256 KiB**'lık parçalarla. Her parça ayrı çerçevedir; uzun aktarımda da her çerçeve eşi canlı gösterir (heartbeat kesilmez).
 
 ## Mesajlar
@@ -27,6 +28,9 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 | `Clock` | `lamport: u64` | `oc run` bağlantısında `Hello`'dan hemen sonra; alan taraf saatini `max(kendi, gelen)` yapar. Yeniden başlayan cihazın ilk kopyası böylece eski görünmez |
 | `Clip` | `event_id: [u8; 16]`, `lamport: u64`, `payload: Text(String) \| Png(Vec<u8>)` | Pano olayı. `Png` PNG imzasıyla başlamalı. Gönderici görselleri bu mesajla değil parçalarla yollar |
 | `ImageStart` | `event_id`, `lamport`, `total_bytes: u32` | Parçalı görselin başı; 1 ≤ `total_bytes` ≤ 32 MiB. Önceki görsel bitmeden yenisi gelirse bağlantı kapanır |
+| `FilesStart` | `event_id`, `lamport`, `files: FileList` | Dosya aktarımının başı. `FileList.entries`: `{ path, size, is_dir }`; yol göreli, `/` ayraçlı, her adı `portable_name` ile aynı olmalı (Windows'ta geçersiz karakter, sondaki nokta/boşluk, `CON` gibi adlar yok), klasör içeriğinden önce gelir, büyük/küçük harf duyarsız tekrar yok. Gönderici klasör içeriğini ada göre sıralar; iki uç aynı listeyi üretir (yankı karşılaştırması buna dayanır) |
+| `FileChunk` | `data: Vec<u8>` | Listedeki dosyaların içeriği sırayla; 1 B – 256 KiB. Fazla veri bağlantıyı kapatır |
+| `TransferCancel` | — | Süren görsel/dosya aktarımı bırakıldı (yeni kopya geldi ya da kaynak dosya okunamadı/değişti); alan yarım kalanı siler. Kontrol mesajları (`Ping`/`Pong`) parçaların arasına girebilir |
 | `ImageChunk` | `data: Vec<u8>` | 1 B – 256 KiB. Başlangıçsız parça ya da bildirilen boyutu aşan toplam bağlantıyı kapatır; tamamlanınca alan taraf tek `Clip` olayı olarak işler |
 | `Ping` | `nonce: u64` | 5 sn'de bir |
 | `Pong` | `nonce: u64` | |

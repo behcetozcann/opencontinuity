@@ -1,11 +1,14 @@
+use std::path::PathBuf;
+
+use anyhow::Context as _;
 use objc2::rc::Retained;
-use objc2::runtime::NSObjectProtocol;
+use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 use objc2::sel;
 use objc2_app_kit::{
-    NSBitmapImageFileType, NSBitmapImageRep, NSPasteboard, NSPasteboardAccessBehavior, NSPasteboardTypePNG,
-    NSPasteboardTypeString, NSPasteboardTypeTIFF,
+    NSBitmapImageFileType, NSBitmapImageRep, NSPasteboard, NSPasteboardAccessBehavior, NSPasteboardTypeFileURL,
+    NSPasteboardItem, NSPasteboardTypePNG, NSPasteboardTypeString, NSPasteboardTypeTIFF,
 };
-use objc2_foundation::{NSData, NSDictionary, NSString};
+use objc2_foundation::{NSArray, NSData, NSDictionary, NSString, NSURL};
 
 use crate::{Clipboard, Content, PNG_SIGNATURE};
 
@@ -31,6 +34,23 @@ impl MacClipboard {
             let name = pasteboard_type.to_string();
             SENSITIVE_TYPES.contains(&name.as_str())
         })
+    }
+
+    /// Her kopyalanan öğe ayrı pano öğesidir. Finder dosya referans URL'si
+    /// (`file:///.file/id=…`) yazabilir; `filePathURL` onu yola çevirir.
+    fn read_files(&self) -> Option<Vec<PathBuf>> {
+        // SAFETY: AppKit'in sabit, ömrü süresiz NSString'i.
+        let file_url_type = unsafe { NSPasteboardTypeFileURL };
+        let paths: Vec<PathBuf> = self
+            .pasteboard
+            .pasteboardItems()?
+            .iter()
+            .filter_map(|item| {
+                let url = NSURL::URLWithString(&*item.stringForType(file_url_type)?)?;
+                Some(PathBuf::from(url.filePathURL()?.path()?.to_string()))
+            })
+            .collect();
+        (!paths.is_empty()).then_some(paths)
     }
 
     /// Ekran görüntüleri ve tarayıcılar PNG koyar; Önizleme gibi uygulamalar yalnız TIFF.
@@ -61,6 +81,9 @@ impl Clipboard for MacClipboard {
         }
         // SAFETY: AppKit'in sabit, ömrü süresiz NSString'i.
         let string_type = unsafe { NSPasteboardTypeString };
+        if let Some(paths) = self.read_files() {
+            return Ok(Content::Files(paths));
+        }
         let text = self.pasteboard.stringForType(string_type).map(|text| text.to_string());
         if let Some(text) = text.as_ref().filter(|text| !text.is_empty()) {
             return Ok(Content::Text(text.clone()));
@@ -88,6 +111,29 @@ impl Clipboard for MacClipboard {
         self.pasteboard.clearContents();
         if !self.pasteboard.setData_forType(Some(&NSData::with_bytes(png)), png_type) {
             anyhow::bail!("NSPasteboard görseli kabul etmedi");
+        }
+        Ok(())
+    }
+
+    /// Her dosya, URL'si hemen yazılmış ayrı bir pano öğesidir. `NSURL` nesnelerini
+    /// doğrudan yazınca ilki dışındakiler tembel veri oluyor, yazan süreç
+    /// kapanınca kayboluyordu (gözlendi: 2 öğe yazıldı, 1 okundu).
+    fn write_files(&self, paths: &[PathBuf]) -> anyhow::Result<()> {
+        // SAFETY: bkz. read_files.
+        let file_url_type = unsafe { NSPasteboardTypeFileURL };
+        let mut items = Vec::new();
+        for path in paths {
+            let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+            let address = url.absoluteString().context("dosya adresi oluşturulamadı")?;
+            let item = NSPasteboardItem::new();
+            if !item.setString_forType(&address, file_url_type) {
+                anyhow::bail!("pano öğesi oluşturulamadı");
+            }
+            items.push(ProtocolObject::from_retained(item));
+        }
+        self.pasteboard.clearContents();
+        if !self.pasteboard.writeObjects(&NSArray::from_retained_slice(&items)) {
+            anyhow::bail!("NSPasteboard dosyaları kabul etmedi");
         }
         Ok(())
     }
@@ -122,3 +168,4 @@ pub fn access_behavior() -> Option<&'static str> {
         _ => "unknown",
     })
 }
+

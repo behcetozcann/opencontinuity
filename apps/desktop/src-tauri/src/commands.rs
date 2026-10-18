@@ -88,7 +88,25 @@ pub fn open_project_page() -> Result<(), String> {
     open_external("https://github.com/behcetozcann/opencontinuity")
 }
 
-/// Yalnız bu dosyadaki sabit adresler açılır; arayüzden adres alınmaz.
+#[tauri::command]
+pub fn open_files_dir() -> Result<(), String> {
+    let dir = oc_engine::config::files_dir().map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    open_external(&dir.to_string_lossy())
+}
+
+/// Son aktarımlardaki gelen dosyaların klasörünü açar; yol arayüzden değil kayıttan alınır.
+#[tauri::command]
+pub fn reveal_transfer(state: State<'_, AppState>, at_ms: u64) -> Result<(), String> {
+    let folder = state.view.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).saved_folder(at_ms);
+    let folder = folder.ok_or("bu aktarımın klasörü yok")?;
+    if !folder.exists() {
+        return Err("klasör artık yok (silinmiş ya da taşınmış)".into());
+    }
+    open_external(&folder.to_string_lossy())
+}
+
+/// Yalnız bu dosyadaki sabit adresler ve uygulamanın kaydettiği klasörler açılır.
 fn open_external(target: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open").arg(target).spawn();

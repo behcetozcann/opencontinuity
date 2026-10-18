@@ -1,10 +1,12 @@
 //! İki motoru aynı makinede, sahte panoyla ve mDNS'siz çalıştıran yardımcılar.
+// Her test dosyası yardımcıların bir kısmını kullanır.
+#![allow(dead_code)]
 
 use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
 use oc_engine::{
-    ClipboardPort, ClipboardSource, Command, Engine, EngineConfig, Event, Handle, PairingStage, Payload, Snapshot, Timing,
+    Clip, ClipboardPort, ClipboardSource, Command, Engine, EngineConfig, Event, Handle, PairingStage, Snapshot, Timing,
 };
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -22,8 +24,8 @@ pub fn fast_timing() -> Timing {
     }
 }
 
-pub fn text(value: &str) -> Payload {
-    Payload::Text(value.to_owned())
+pub fn text(value: &str) -> Clip {
+    Clip::Text(value.to_owned())
 }
 
 pub fn free_port() -> u16 {
@@ -34,11 +36,13 @@ pub struct Node {
     pub handle: Handle,
     pub events: mpsc::UnboundedReceiver<Event>,
     /// Sahte panoda "kullanıcı kopyaladı".
-    pub copy: mpsc::Sender<Payload>,
+    pub copy: mpsc::Sender<Clip>,
     /// Motorun panoya yazdıkları.
-    pub written: std_mpsc::Receiver<Payload>,
+    pub written: std_mpsc::Receiver<Clip>,
     pub port: u16,
     pub dir: tempfile::TempDir,
+    /// Gelen dosyaların kaydedildiği klasör.
+    pub files: tempfile::TempDir,
 }
 
 impl Node {
@@ -49,6 +53,7 @@ impl Node {
 
     pub fn start_in(name: &str, dir: tempfile::TempDir) -> Self {
         let port = free_port();
+        let files = tempfile::tempdir().unwrap();
         let (copy, local_copies) = mpsc::channel(8);
         let (writes, written) = std_mpsc::channel();
         let config = EngineConfig {
@@ -57,10 +62,11 @@ impl Node {
             port,
             discovery: false,
             timing: fast_timing(),
+            files_dir: files.path().to_path_buf(),
         };
         let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_copies, writes }));
         tokio::spawn(async move { engine.run().await.unwrap() });
-        Self { handle, events, copy, written, port, dir }
+        Self { handle, events, copy, written, port, dir, files }
     }
 
     /// Koşulu sağlayan olay gelene kadar bekler; diğer olaylar atlanır.
@@ -89,7 +95,7 @@ impl Node {
     }
 
     /// Panoya yazılan sonraki içerik.
-    pub async fn next_written(&self) -> Payload {
+    pub async fn next_written(&self) -> Clip {
         let deadline = std::time::Instant::now() + WAIT;
         loop {
             if let Ok(text) = self.written.try_recv() {

@@ -10,8 +10,8 @@ anyhow.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSData", "NSDictionary", "NSString"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSBitmapImageRep", "NSImageRep", "NSPasteboard"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSData", "NSDictionary", "NSString", "NSURL"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSBitmapImageRep", "NSImageRep", "NSPasteboard", "NSPasteboardItem"] }
 
 [target.'cfg(windows)'.dependencies]
 image = { version = "0.25", default-features = false, features = ["bmp", "png"] }
@@ -20,6 +20,7 @@ windows = { version = "0.62", features = [
     "Win32_System_DataExchange",
     "Win32_System_Memory",
     "Win32_System_Threading",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

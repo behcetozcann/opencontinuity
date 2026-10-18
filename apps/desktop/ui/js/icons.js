@@ -14,6 +14,7 @@ export const icons = {
   text: (size = 16) => stroke('<path d="M5 7h14M5 12h14M5 17h9"/>', size),
   image: (size = 16) =>
     stroke('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-4.5-4.5-10.5 8.5"/>', size),
+  files: (size = 16) => stroke('<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>', size),
   alert: (size = 10) => stroke('<path d="M12 6v7M12 17.5v.01"/>', size),
   sent: (size = 16) => stroke('<path d="M7 17L17 7M9 7h8v8"/>', size),
   received: (size = 16) => stroke('<path d="M17 7L7 17M15 17H7V9"/>', size),

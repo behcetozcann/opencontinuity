@@ -14,6 +14,7 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 - [x] Engine (iki motor, sahte pano, localhost): eşleştirme + iki yönlü aktarım + yankı döngüsü yok; duraklatmada gönderim/uygulama yok ve devamdaki ilk kopya reddedilmez; `unpair` sonrası eski eş reddedilir ve yeniden eşleştirme çalışır; kod reddinde iki uçta da kayıt yok.
 - [x] Görsel (v4): 10 MiB'lık görsel parçalanıp birleşir; başlangıçsız/iç içe/fazla parça ve PNG imzasız içerik reddedilir; çerçeve sınırını aşan görsel iki motor arasında gider, yankısı dönmez, bağlantı kopmaz; aynı baytlı metin ve görsel yankı sayılmaz.
 - [x] Pano (Windows dönüşümü, her platformda): PNG → CF_DIB → PNG piksel piksel aynı; saydam piksel DIB'de beyaz; PNG uzunluğu sondaki dolguyu atar.
+- [x] Dosya (v5): liste doğrulaması (`..`, mutlak yol, Windows'ta geçersiz ad, sırasız klasör, büyük/küçük harf tekrarı, sınır); klasör ağacı ada göre sıralı toplanır, çöp dosyalar atlanır; parçalar diske yazılır, fazla veri ve iptal yarım klasörü bırakmaz; budama yalnız tarihli klasörlere dokunur. İki motor arasında klasör + dosya bayt bayt gider, yankı dönmez; yeni kopya süren aktarımı bırakır, yarım klasör kalmaz; 500 MiB üstü `TooLarge`.
 - [x] Heartbeat: susan eş zaman aşımıyla kopuk sayılır (testte kısaltılmış sürelerle: 600 ms; gerçek değer 15 sn).
 
 ## Gerçek cihaz (Mac ↔ Windows, aynı LAN)
@@ -67,6 +68,20 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 | G6 | Excel hücreleri / Word metni kopyala → metin gider, görsel gitmez | [ ] | [ ] |
 | G7 | Alınan görselin yankısı geri gönderilmez (karşı tarafta "Alındı" sonrası "Gönderildi" yok) | [ ] | [ ] |
 | G8 | Finder / Gezgin'de dosya kopyala → dosya adı metni gider (dosya aktarımı yok) | [ ] | [ ] |
+
+## Gerçek cihaz — Faz 2 dosya aktarımı (v5)
+
+| # | Senaryo | Mac | Windows |
+|---|---|---|---|
+| D0 | macOS adaptörü: Finder kopyası okunur, yazılan 2 öğe yazan süreç kapandıktan sonra da 2 kalır (`oc clip-set-files` + JXA sayımı) | [x] 2026-10-18 (ilk sürümde 1 kalıyordu, düzeltildi) | — |
+| D1 | Tek PDF: Mac Finder'da Cmd+C → Windows masaüstünde Ctrl+V | [ ] | [ ] |
+| D2 | Gezgin'de Excel/Word dosyası Ctrl+C → Mac Finder'da Cmd+V | [ ] | [ ] |
+| D3 | İç içe klasör (boş alt klasör dahil) iki yönde; yapı ve içerik aynı | [ ] | [ ] |
+| D4 | Türkçe/emoji adlı dosya; Mac'te `:` içeren ad Windows'ta `_` ile gelir | [ ] | [ ] |
+| D5 | 200 MB+ dosya: "gönderiliyor/alınıyor" görünür, bu sırada metin kopyalanırsa aktarım bırakılır ve metin gider | [ ] | [ ] |
+| D6 | 500 MB üstü: "gönderilmedi · 500 MB sınırını aşıyor" | [ ] | [ ] |
+| D7 | "Göster" gelen klasörü açar; Ayarlar → Gelen dosyalar → Klasörü aç | [ ] | [ ] |
+| D8 | Alınan dosyalar yankı olarak geri gönderilmez | [ ] | [ ] |
 
 ## Bulgular
 

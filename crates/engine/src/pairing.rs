@@ -43,7 +43,7 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
         fingerprint: session.peer_fingerprint,
         last_address: Some(peer_address.to_string()),
     };
-    let mut link = Link::start(session, context.config.timing.heartbeat_timeout);
+    let mut link = Link::start(session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone());
     let name = peer.name.clone();
     context.events.update(|snapshot| snapshot.pairing = Some(PairingStage::Confirm { peer: name, code }));
 

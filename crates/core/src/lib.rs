@@ -93,7 +93,7 @@ fn event_id(device_id: &DeviceId, lamport: u64) -> EventId {
 pub fn content_hash(payload: &Payload) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update([payload.kind() as u8]);
-    hasher.update(payload.as_bytes());
+    hasher.update(payload.digest_input());
     hasher.finalize().into()
 }
 

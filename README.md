@@ -61,7 +61,7 @@ Sonra iki bilgisayarda da uygulamayı açın, **Eşleştir**'e basın, iki ekran
 
 1. Bilgisayarlar aynı ağda mDNS/Bonjour ile birbirini bulur.
 2. İlk eşleştirmede iki ekranda aynı 6 haneli kod görünür; bu kod TLS oturumuna bağlıdır, araya giren biri aynı kodu üretemez.
-3. Sonrasında bir cihazda kopyaladığınız düz metin ya da (0.1.3 ile) görsel — ekran görüntüsü, tarayıcıdan kopyalanan resim — diğerinin panosuna yazılır. Döngü ve çakışma önleme, Lamport saatleriyle "son yerel kopya önceliklidir" kuralına göre çalışır.
+3. Sonrasında bir cihazda kopyaladığınız düz metin, görsel (ekran görüntüsü, tarayıcıdan kopyalanan resim) ya da Finder/Gezgin'de kopyalanan dosya ve klasörler diğerinin panosuna yazılır. Döngü ve çakışma önleme, Lamport saatleriyle "son yerel kopya önceliklidir" kuralına göre çalışır.
 
 Ayrıntı: [mimari](docs/architecture.md) · [protokol](docs/protocol.md) · [güvenlik modeli](docs/security-model.md)
 
@@ -78,7 +78,8 @@ Güvenlik açığı bildirimi için lütfen herkese açık issue yerine [GitHub 
 ## Yol haritası
 
 - [x] Mac ↔ Windows düz metin, eşleştirme, menü çubuğu / tepsi uygulaması, otomatik güncelleme
-- [ ] Görsel (PNG) panosu
+- [x] Görsel (PNG) panosu (0.1.3)
+- [x] Dosya ve klasör kopyala-yapıştır, 500 MB'a kadar (0.1.4)
 - [ ] Birden fazla cihaz
 - [ ] Linux
 - [ ] Mobil (Android / iOS paylaşım menüsü)

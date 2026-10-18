@@ -14,6 +14,7 @@
 | Eşleştirmede araya girme (MITM) | 6 haneli SAS, TLS exporter'a bağlı; iki uçta kullanıcı onayı |
 | Eşleşmemiş cihazın bağlanıp pano okuması/yazması | Eşleşme sonrası parmak izi sabitleme; bilinmeyen sertifika el sıkışmada reddedilir |
 | mDNS'te sahte cihaz yayını | Keşif yalnızca adres verir; güven parmak izine dayanır, TXT kaydına değil |
+| Kötü niyetli dosya adı ile hedef dışına yazma | Yollar göreli, `..`/mutlak/boş bileşen yok, her ad taşınabilir ad olmalı; klasör içeriğinden önce bildirilmeli; dosyalar yalnız `İndirilenler/OpenContinuity/.partial-<olay>` altında oluşturulur, sembolik bağ izlenmez. Toplam ≤ 500 MiB, ≤ 5.000 girdi |
 | Kötü niyetli dev çerçeve / bellek tüketme | Çerçeve ≤ 5 MiB, metin ≤ 4 MiB, görsel ≤ 32 MiB (parçalı; toplam `ImageStart`'ta doğrulanmadan ayrılmaz), PNG imzası zorunlu; uzunluk okunmadan bellek ayrılmaz. Windows'ta DIB dönüşümü 50 MP üstünde yapılmaz |
 | Geçersiz UTF-8 / bozuk mesaj | Çözme hatası bağlantıyı kapatır, panoya hiçbir şey yazılmaz |
 | Log veya test kaydına pano içeriği sızması | İçerik asla loglanmaz; yalnız uzunluk + hash'in ilk 8 hex karakteri |

@@ -5,11 +5,10 @@ use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
 use oc_clipboard::{Clipboard, Content};
-use oc_protocol::Payload;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
-use crate::ClipboardPort;
+use crate::{Clip, ClipboardPort};
 use crate::events::Event;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -20,7 +19,7 @@ pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPo
         let _ = events.send(Event::Diagnostic { message });
     };
     let (local_sender, local_copies) = mpsc::channel(8);
-    let (writes, write_receiver) = std_mpsc::channel::<Payload>();
+    let (writes, write_receiver) = std_mpsc::channel::<Clip>();
     let (ready_sender, ready_receiver) = std_mpsc::channel();
     std::thread::Builder::new().name("pano".into()).spawn(move || {
         let clipboard = match oc_clipboard::system() {
@@ -37,12 +36,12 @@ pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPo
         let mut last_sequence = clipboard.sequence();
         loop {
             match write_receiver.recv_timeout(POLL_INTERVAL) {
-                Ok(payload) => {
+                Ok(clip) => {
                     let before = clipboard.sequence();
-                    match write(clipboard.as_ref(), &payload) {
+                    match write(clipboard.as_ref(), &clip) {
                         Ok(()) => log(format!(
                             "[pano] uzak içerik yazıldı ({}), sayaç {before}→{}",
-                            fingerprint(&payload),
+                            fingerprint(&clip),
                             clipboard.sequence()
                         )),
                         Err(error) => log(format!("[pano] yazılamadı: {error}")),
@@ -57,8 +56,9 @@ pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPo
             }
             let previous_sequence = std::mem::replace(&mut last_sequence, sequence);
             let payload = match oc_clipboard::read_after_change(clipboard.as_ref()) {
-                Ok(Content::Text(text)) => Ok(Payload::Text(text)),
-                Ok(Content::Image(png)) => Ok(Payload::Png(png)),
+                Ok(Content::Text(text)) => Ok(Clip::Text(text)),
+                Ok(Content::Image(png)) => Ok(Clip::Png(png)),
+                Ok(Content::Files(paths)) => Ok(Clip::Files(paths)),
                 Ok(Content::Concealed) => Err("gizli/geçici, atlandı".to_owned()),
                 Ok(Content::Unsupported) => Err("desteklenen içerik yok".to_owned()),
                 Err(error) => Err(format!("okunamadı: {error}")),
@@ -79,18 +79,20 @@ pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPo
     Ok(ClipboardPort { local_copies, writes })
 }
 
-fn write(clipboard: &dyn Clipboard, payload: &Payload) -> anyhow::Result<()> {
-    match payload {
-        Payload::Text(text) => clipboard.write_text(text),
-        Payload::Png(png) => clipboard.write_png(png),
+fn write(clipboard: &dyn Clipboard, clip: &Clip) -> anyhow::Result<()> {
+    match clip {
+        Clip::Text(text) => clipboard.write_text(text),
+        Clip::Png(png) => clipboard.write_png(png),
+        Clip::Files(paths) => clipboard.write_files(paths),
     }
 }
 
-/// İçeriği değil yalnız tür, uzunluk ve hash önekini gösterir.
-fn fingerprint(payload: &Payload) -> String {
-    let kind = match payload {
-        Payload::Text(_) => "metin",
-        Payload::Png(_) => "görsel",
-    };
-    format!("{kind}, {} bayt, hash {}", payload.len(), &hex::encode(Sha256::digest(payload.as_bytes()))[..8])
+/// İçeriği değil yalnız tür, uzunluk ve hash önekini gösterir; dosya adları yazılmaz.
+fn fingerprint(clip: &Clip) -> String {
+    let hash = |bytes: &[u8]| hex::encode(Sha256::digest(bytes))[..8].to_owned();
+    match clip {
+        Clip::Text(text) => format!("metin, {} bayt, hash {}", text.len(), hash(text.as_bytes())),
+        Clip::Png(png) => format!("görsel, {} bayt, hash {}", png.len(), hash(png)),
+        Clip::Files(paths) => format!("dosya, {} öğe", paths.len()),
+    }
 }

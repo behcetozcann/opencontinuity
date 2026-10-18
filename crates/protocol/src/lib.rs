@@ -1,7 +1,8 @@
-//! Protokol v4: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
+//! Protokol v5: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
 //! Ayrıntı: `docs/protocol.md`.
 
 mod chunks;
+mod files;
 mod payload;
 
 use anyhow::{Context, bail};
@@ -9,9 +10,10 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub use chunks::{Assembler, IMAGE_CHUNK_BYTES, split};
+pub use files::{FileEntry, FileList, MAX_FILE_ENTRIES, MAX_FILES_BYTES, portable_name};
 pub use payload::{Chunk, ContentKind, PNG_SIGNATURE, Payload};
 
-pub const VERSION: u16 = 4;
+pub const VERSION: u16 = 5;
 pub const MAX_FRAME_BYTES: usize = 5 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 /// Görseller parça parça gönderildiği için çerçeve sınırından büyük olabilir.
@@ -33,6 +35,13 @@ pub enum Message {
     /// Parçalı görsel olayının başı; ardından toplam `total_bytes` eden `ImageChunk`'lar gelir.
     ImageStart { event_id: EventId, lamport: u64, total_bytes: u32 },
     ImageChunk { data: Chunk },
+    /// Dosya aktarımının başı. Ardından listedeki dosyaların içeriği sırayla,
+    /// toplam `files.total_bytes()` eden `FileChunk`'lar halinde gelir.
+    FilesStart { event_id: EventId, lamport: u64, files: FileList },
+    FileChunk { data: Chunk },
+    /// Süren görsel/dosya aktarımı bırakıldı (yeni kopya geldi ya da dosya
+    /// okunamadı); alan taraf yarım kalanı atar.
+    TransferCancel,
     Ping { nonce: u64 },
     Pong { nonce: u64 },
 }
@@ -81,13 +90,16 @@ pub async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> anyhow::Resul
 
 fn validate(message: &Message) -> anyhow::Result<()> {
     match message {
+        // Dosya içeriği listeyle aynı mesajda taşınamaz; `FilesStart` + parçalar kullanılır.
+        Message::Clip(ClipEvent { payload: Payload::Files(_), .. }) => bail!("dosyalar FilesStart ile gönderilir"),
         Message::Clip(event) => event.payload.validate(),
         Message::ImageStart { total_bytes, .. } if *total_bytes == 0 || *total_bytes as usize > MAX_IMAGE_BYTES => {
             bail!("görsel sınırı aşıldı: {total_bytes} bayt")
         }
-        Message::ImageChunk { data } if data.0.is_empty() || data.0.len() > IMAGE_CHUNK_BYTES => {
-            bail!("geçersiz görsel parçası: {} bayt", data.0.len())
+        Message::ImageChunk { data } | Message::FileChunk { data } if data.0.is_empty() || data.0.len() > IMAGE_CHUNK_BYTES => {
+            bail!("geçersiz parça: {} bayt", data.0.len())
         }
+        Message::FilesStart { files, .. } => files.validate(),
         _ => Ok(()),
     }
 }

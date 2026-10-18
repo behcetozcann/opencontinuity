@@ -42,6 +42,13 @@ pub fn set_image(path: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn set_files(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    let paths: Vec<_> = paths.iter().map(std::fs::canonicalize).collect::<Result<_, _>>()?;
+    oc_clipboard::system()?.write_files(&paths)?;
+    println!("Panoya yazıldı: {}", describe(&Content::Files(paths)));
+    Ok(())
+}
+
 /// İçeriği asla göstermez: yalnız uzunluk ve hash öneki.
 fn describe(content: &Content) -> String {
     match content {
@@ -55,6 +62,7 @@ fn describe(content: &Content) -> String {
             )
         }
         Content::Image(png) => format!("görsel (PNG), {} bayt, hash {}", png.len(), &hex::encode(Sha256::digest(png))[..8]),
+        Content::Files(paths) => format!("dosya, {} öğe", paths.len()),
         Content::Concealed => "gizli/geçici işaretli (gönderilmez)".to_owned(),
         Content::Unsupported => "desteklenen içerik yok".to_owned(),
     }

@@ -88,7 +88,7 @@
       <div class="transfers-wrap">
         <div class="section-title">Son aktarımlar</div>
         <ul class="transfers" id="transfers"></ul>
-        <p class="empty" id="transfers-empty">Henüz aktarım yok. Bir metin ya da görsel kopyalamayı deneyin.</p>
+        <p class="empty" id="transfers-empty">Henüz aktarım yok. Bir metin, görsel ya da dosya kopyalamayı deneyin.</p>
       </div>
       <footer class="bar">
         <button class="btn link" id="open-settings"><i data-icon="gear"></i>Ayarlar</button>
@@ -110,6 +110,15 @@
             <input type="checkbox" class="switch" id="autostart">
           </label>
           <p class="field-error" id="autostart-error" hidden></p>
+        </div>
+
+        <div class="group">
+          <div class="group-title">Gelen dosyalar</div>
+          <div class="card">
+            <p class="small muted">Diğer bilgisayardan kopyalanan dosyalar <b>İndirilenler › OpenContinuity</b> klasörüne iner, yapıştırınca hedefe kopyalanır. Son 10 aktarım saklanır, daha eskileri silinir. Bir kopyada en fazla 500 MB.</p>
+            <button class="btn secondary" id="open-files">Klasörü aç</button>
+            <p class="field-error" id="open-files-error" hidden></p>
+          </div>
         </div>
 
         <div class="group" id="settings-peer">
@@ -159,6 +168,7 @@
               <li>Veriler yalnız yerel ağda, şifreli olarak iki bilgisayar arasında gider.</li>
               <li>Parola yöneticilerinin gizli işaretli kopyaları gönderilmez.</li>
               <li>Karşı bilgisayar kapalıyken kopyalananlar biriktirilmez.</li>
+              <li>Dosyalar ve klasörler de kopyalanınca karşıya gider (500 MB'a kadar).</li>
             </ul>
             <p class="small muted">Ticari olmayan kullanım için ücretsizdir (PolyForm Noncommercial).</p>
             <button class="btn secondary" id="open-project">GitHub sayfası</button>

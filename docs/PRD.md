@@ -24,6 +24,7 @@ Mac ve Windows arasında metin taşımak için bugün e-posta, mesajlaşma uygul
 - Ekran görüntüsü, tarayıcıdan "görseli kopyala" ve görsel uygulamalarından kopyalanan resim iki yönde gider (aktarımda PNG; macOS TIFF, Windows DIB kaynakları PNG'ye çevrilir).
 - 32 MB'a kadar görsel parça parça gider; aktarım sürerken bağlantı kopmaz.
 - Panoda metin de varsa metin gider (Office kopyaları).
+- Finder/Gezgin'de kopyalanan dosya ve klasörler (her biçim, 500 MB'a kadar) karşıda Cmd+V/Ctrl+V ile hedefe yapıştırılır; gelenler İndirilenler/OpenContinuity'de son 10 aktarım olarak saklanır.
 
 ## Kapsam dışı (Faz 0 ve V0.1)
 

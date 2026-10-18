@@ -1,28 +1,32 @@
-use std::thread::sleep;
-use std::time::Duration;
+use std::path::PathBuf;
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HGLOBAL};
+use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardFormatNameW,
-    GetClipboardOwner, GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
-    RegisterClipboardFormatW, SetClipboardData,
+    EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardFormatNameW, GetClipboardOwner,
+    GetClipboardSequenceNumber, IsClipboardFormatAvailable, RegisterClipboardFormatW,
 };
-use windows::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock};
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
+use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 use windows::core::{PWSTR, w};
 
+use crate::windows_memory::{OpenGuard, read_dword, read_global, set_global, utf16_until_nul};
 use crate::{Clipboard, Content, dib, png_length};
 
 const CF_DIB: u32 = 8;
 const CF_UNICODETEXT: u32 = 13;
-const OPEN_RETRIES: u32 = 10;
+const CF_HDROP: u32 = 15;
+/// DROPFILES başlığı: pFiles (u32) + POINT (2 × i32) + fNC + fWide (BOOL).
+const DROPFILES_BYTES: u32 = 20;
+const DROPEFFECT_COPY: u32 = 1;
 
 pub struct WindowsClipboard {
     /// Tarayıcılar, Office ve ekran alıntısı aracı bu adla PNG koyar.
     png_format: u32,
+    /// Yapıştırmanın taşıma değil kopyalama olduğunu Gezgin'e bildirir.
+    drop_effect_format: u32,
     exclude_format: u32,
     history_format: u32,
     cloud_format: u32,
@@ -31,18 +35,19 @@ pub struct WindowsClipboard {
 impl WindowsClipboard {
     pub fn new() -> anyhow::Result<Self> {
         // SAFETY: sabit, null ile biten geniş dizgeler.
-        let (png_format, exclude_format, history_format, cloud_format) = unsafe {
+        let (png_format, drop_effect_format, exclude_format, history_format, cloud_format) = unsafe {
             (
                 RegisterClipboardFormatW(w!("PNG")),
+                RegisterClipboardFormatW(w!("Preferred DropEffect")),
                 RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing")),
                 RegisterClipboardFormatW(w!("CanIncludeInClipboardHistory")),
                 RegisterClipboardFormatW(w!("CanUploadToCloudClipboard")),
             )
         };
-        if png_format == 0 || exclude_format == 0 || history_format == 0 || cloud_format == 0 {
+        if [png_format, drop_effect_format, exclude_format, history_format, cloud_format].contains(&0) {
             anyhow::bail!("pano biçimleri kaydedilemedi");
         }
-        Ok(Self { png_format, exclude_format, history_format, cloud_format })
+        Ok(Self { png_format, drop_effect_format, exclude_format, history_format, cloud_format })
     }
 
     /// Pano açıkken çağrılmalı.
@@ -69,6 +74,9 @@ impl Clipboard for WindowsClipboard {
             unsafe {
                 if self.is_sensitive() {
                     return Ok(Content::Concealed);
+                }
+                if let Some(paths) = read_dropped_files() {
+                    return Ok(Content::Files(paths));
                 }
                 let text = read_global(CF_UNICODETEXT).map(|bytes| utf16_until_nul(&bytes)).transpose()?;
                 if let Some(text) = text.as_ref().filter(|text| !text.is_empty()) {
@@ -113,6 +121,25 @@ impl Clipboard for WindowsClipboard {
             }
         }
         Ok(())
+    }
+
+    fn write_files(&self, paths: &[PathBuf]) -> anyhow::Result<()> {
+        let mut bytes = Vec::new();
+        for field in [DROPFILES_BYTES, 0, 0, 0, 1] {
+            // pFiles, pt.x, pt.y, fNC, fWide (UTF-16 yollar)
+            bytes.extend_from_slice(&field.to_le_bytes());
+        }
+        for path in paths {
+            bytes.extend(path.as_os_str().to_string_lossy().encode_utf16().chain([0]).flat_map(u16::to_le_bytes));
+        }
+        bytes.extend_from_slice(&[0, 0]);
+        let _guard = OpenGuard::open()?;
+        // SAFETY: pano bu iş parçacığında açık.
+        unsafe {
+            EmptyClipboard()?;
+            set_global(CF_HDROP, &bytes)?;
+            set_global(self.drop_effect_format, &DROPEFFECT_COPY.to_le_bytes())
+        }
     }
 
     fn describe_source(&self) -> String {
@@ -177,80 +204,20 @@ fn format_name(format: u32) -> String {
     if length > 0 { String::from_utf16_lossy(&buffer[..length as usize]) } else { format!("#{format}") }
 }
 
-fn utf16_until_nul(bytes: &[u8]) -> anyhow::Result<String> {
-    let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
-    let length = units.iter().position(|&unit| unit == 0).unwrap_or(units.len());
-    Ok(String::from_utf16(&units[..length])?)
-}
-
-/// Pano açıkken çağrılmalı. Biçim yoksa ya da okunamazsa `None`. Boyut
-/// yuvarlanmış olabilir; gerçek uzunluğu biçimin kendisi belirler.
-unsafe fn read_global(format: u32) -> Option<Vec<u8>> {
+/// Pano açıkken çağrılmalı. Gezgin'de kopyalanan dosyaların yolları.
+unsafe fn read_dropped_files() -> Option<Vec<PathBuf>> {
     unsafe {
-        IsClipboardFormatAvailable(format).ok()?;
-        let global = HGLOBAL(GetClipboardData(format).ok()?.0);
-        let pointer = GlobalLock(global) as *const u8;
-        if pointer.is_null() {
-            return None;
-        }
-        let bytes = std::slice::from_raw_parts(pointer, GlobalSize(global)).to_vec();
-        let _ = GlobalUnlock(global);
-        Some(bytes)
-    }
-}
-
-/// Pano açık ve boşaltılmışken çağrılmalı; başarılıysa belleğin sahipliği sisteme geçer.
-unsafe fn set_global(format: u32, bytes: &[u8]) -> anyhow::Result<()> {
-    unsafe {
-        let global = GlobalAlloc(GMEM_MOVEABLE, bytes.len())?;
-        let pointer = GlobalLock(global) as *mut u8;
-        if pointer.is_null() {
-            anyhow::bail!("pano belleği kilitlenemedi");
-        }
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
-        let _ = GlobalUnlock(global);
-        SetClipboardData(format, Some(HANDLE(global.0)))?;
-    }
-    Ok(())
-}
-
-/// Pano açıkken çağrılmalı. Biçim yoksa `None`.
-unsafe fn read_dword(format: u32) -> Option<u32> {
-    unsafe {
-        IsClipboardFormatAvailable(format).ok()?;
-        let global = HGLOBAL(GetClipboardData(format).ok()?.0);
-        if GlobalSize(global) < 4 {
-            return None;
-        }
-        let pointer = GlobalLock(global) as *const u32;
-        if pointer.is_null() {
-            return None;
-        }
-        let value = pointer.read_unaligned();
-        let _ = GlobalUnlock(global);
-        Some(value)
-    }
-}
-
-/// Pano başka uygulamada açıksa kısa aralıklarla yeniden dener; düşünce kapatır.
-struct OpenGuard;
-
-impl OpenGuard {
-    fn open() -> anyhow::Result<Self> {
-        for _ in 0..OPEN_RETRIES {
-            // SAFETY: sahipsiz açma; CloseClipboard Drop'ta çağrılır.
-            if unsafe { OpenClipboard(None) }.is_ok() {
-                return Ok(Self);
-            }
-            sleep(Duration::from_millis(20));
-        }
-        anyhow::bail!("pano başka bir uygulama tarafından kilitli")
-    }
-}
-
-impl Drop for OpenGuard {
-    fn drop(&mut self) {
-        // SAFETY: open() başarılı olduysa pano bu iş parçacığında açık.
-        let _ = unsafe { CloseClipboard() };
+        IsClipboardFormatAvailable(CF_HDROP).ok()?;
+        let drop = HDROP(GetClipboardData(CF_HDROP).ok()?.0);
+        let count = DragQueryFileW(drop, u32::MAX, None);
+        let paths: Vec<PathBuf> = (0..count)
+            .filter_map(|index| {
+                let length = DragQueryFileW(drop, index, None) as usize;
+                let mut buffer = vec![0u16; length + 1];
+                let copied = DragQueryFileW(drop, index, Some(&mut buffer)) as usize;
+                (copied > 0).then(|| PathBuf::from(String::from_utf16_lossy(&buffer[..copied])))
+            })
+            .collect();
+        (!paths.is_empty()).then_some(paths)
     }
 }
