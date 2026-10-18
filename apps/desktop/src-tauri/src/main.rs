@@ -89,7 +89,12 @@ fn main() {
     let mut builder = tauri::Builder::default();
     // OC_CONFIG_DIR ile aynı makinede ikinci örnek açılabilsin (eşleştirme denemesi).
     if std::env::var_os("OC_CONFIG_DIR").is_none() {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_window(app)));
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // Eski kayıtlardan biri de girişte açarsa pencere kendiliğinden belirmesin.
+            if !args.iter().any(|arg| arg == autostart::AUTOSTART_ARG) {
+                show_window(app);
+            }
+        }));
     }
     let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())

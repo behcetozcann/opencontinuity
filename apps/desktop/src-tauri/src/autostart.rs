@@ -30,12 +30,26 @@ fn launcher(app: &AppHandle) -> Result<&'static AutoLaunch, String> {
 fn build(app: &AppHandle) -> Result<AutoLaunch, String> {
     let exe = std::env::current_exe().and_then(|path| path.canonicalize()).map_err(|error| error.to_string())?;
     let mut builder = AutoLaunchBuilder::new();
-    builder.set_app_name(&app.package_info().name).set_app_path(&exe.display().to_string()).set_args(&[AUTOSTART_ARG]);
+    builder.set_app_name(&app.package_info().name).set_app_path(&launch_path(&exe)).set_args(&[AUTOSTART_ARG]);
+    // Kurulum kullanıcı başına; varsayılan kip yönetici yetkisi varsa HKLM'ye yazıyordu.
+    #[cfg(windows)]
+    builder.set_windows_enable_mode(auto_launch::WindowsEnableMode::CurrentUser);
     #[cfg(target_os = "macos")]
     builder
         .set_macos_launch_mode(auto_launch::MacOSLaunchMode::LaunchAgent)
         .set_bundle_identifiers(&[app.config().identifier.as_str()]);
     builder.build().map_err(|error| error.to_string())
+}
+
+/// Windows'ta `canonicalize` `\\?\C:\...` biçimi verir; Run kaydında bu önekli,
+/// tırnaksız yolla girişte uygulama açılmadı. Önek atılır, boşluklu yol için tırnaklanır.
+fn launch_path(exe: &Path) -> String {
+    let path = exe.display().to_string();
+    if cfg!(windows) {
+        format!("\"{}\"", path.strip_prefix(r"\\?\").unwrap_or(&path))
+    } else {
+        path
+    }
 }
 
 pub fn is_enabled(app: &AppHandle) -> Result<bool, String> {
