@@ -6,6 +6,7 @@ const { listen } = window.__TAURI__.event;
 export { invoke };
 
 export const isMac = navigator.userAgent.includes("Mac");
+export const isLinux = !isMac && navigator.userAgent.includes("Linux");
 
 export const store = {
   view: null,

@@ -33,7 +33,7 @@
       "nsis"
     ],
     "category": "Utility",
-    "shortDescription": "Mac ve Windows arasında yerel ağda pano paylaşımı",
+    "shortDescription": "Mac, Windows ve Linux arasında yerel ağda pano paylaşımı",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

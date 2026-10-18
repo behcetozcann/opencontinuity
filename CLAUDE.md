@@ -1,6 +1,6 @@
 # OpenContinuity — proje notları
 
-Mac ↔ Windows yerel ağ pano senkronizasyonu (Rust). Ürün kapsamı ve kararlar: `OpenContinuity_Proje_Plani.md`. Belgeler `docs/` altında.
+Mac ↔ Windows ↔ Linux (X11) yerel ağ pano senkronizasyonu (Rust). Ürün kapsamı ve kararlar: `OpenContinuity_Proje_Plani.md`. Belgeler `docs/` altında.
 
 ## Komutlar
 
@@ -10,6 +10,7 @@ cargo build                                        # macOS
 cargo build --target x86_64-pc-windows-gnu         # Windows .exe (mingw-w64, .cargo/config.toml)
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --target x86_64-unknown-linux-gnu -p oc-clipboard --all-targets -- -D warnings   # Linux pano adaptörü (yerelde yalnız bu crate; engine `ring` C derleyicisi ister → CI)
 cd apps/desktop/src-tauri && cargo tauri build --bundles app,dmg                          # macOS paketi (yerel, imzasız; yayın CI'dan)
 # Windows installer: msvc + cargo-xwin (gnu hedefi WebView2Loader.dll'e bağımlı kalıyor, kullanıcıda 'bulunamadı' hatası verdi)
 cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
@@ -55,14 +56,15 @@ Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3
 - Arayüz: grupta cihaz etiketleri, "Son aktarımlar"da kaynak adı, Ayarlar › Cihazlar (kart başına kaldır) + Cihaz ekle. Chrome önizlemesiyle doğrulandı (sahte Tauri: scratchpad `preview1/mock.js`).
 - Gerçek cihaz testi yok: `docs/test-plan.md` M1–M6.
 
+Linux (2026-10-19, `multi-device` dalı): Linux Mint / Cinnamon X11 hedef. `crates/clipboard/src/x11/` (x11rb; XFixes sayaç, sahip iş parçacığı + INCR, `image/png` baytları aynen, dosyalar `x-special/gnome-copied-files` + `text/uri-list`), `uri.rs` (testli). Wayland oturumunda arayüz uyarı kartı. Paket: `deb` + `AppImage` (`ubuntu-22.04`), güncelleyici ikisini de destekler (deb pkexec ile parola sorar), `latest.json`'da `linux-x86_64(-deb|-appimage)`. CI'a ubuntu + `xvfb-run` eklendi, `oc-linux` artifact'ı. **CI hiç koşmadı** (dal push'lanmadı) — engine/masaüstü Linux derlemesi ve X11 testleri ilk CI koşusunda doğrulanacak.
+
 Sıradaki:
-1. Linux (X11/Wayland pano + paket) — kullanıcı 2026-10-19'da gerçek cihazda test edecek.
+1. Dalı push'la (kullanıcı onayı) → CI (Linux derleme + Xvfb testleri) → release.yml'i dalda elle tetikle → kullanıcı Linux'ta `.deb` kurup test-plan L1–L7.
 2. Toplu gerçek cihaz testi: M1–M6 + kopukken kopya (Mac kapak kapat/aç, bağlanmadan kopyala → Windows'ta yapıştır). Kullanıcı testleri biriktirmek istedi.
 3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 4. Diğer Faz 2: pano geçmişi/tercihler, isteğe bağlı "dosya paylaşımı" anahtarı.
-5. Kökte izlenmeyen `AGENTS.md` (eski CLAUDE.md kopyası) ve `icons/` altındaki mobil simgeler: kullanıcı silme izni verdi ama araç izni reddetti; kullanıcı kendisi silebilir.
 
-Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap; `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
+Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap.
 
 ## Yayın akışı
 

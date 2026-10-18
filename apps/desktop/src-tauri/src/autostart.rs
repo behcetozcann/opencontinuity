@@ -1,4 +1,5 @@
-//! Girişte başlatma. macOS'ta LaunchAgent, Windows'ta Run kaydı.
+//! Girişte başlatma. macOS'ta LaunchAgent, Windows'ta Run kaydı, Linux'ta
+//! `~/.config/autostart/*.desktop`.
 //!
 //! tauri-plugin-autostart yerine `auto-launch` doğrudan kullanılır: eklenti
 //! LaunchAgent'a `AssociatedBundleIdentifiers` yazmıyor, macOS Sistem
@@ -28,7 +29,10 @@ fn launcher(app: &AppHandle) -> Result<&'static AutoLaunch, String> {
 }
 
 fn build(app: &AppHandle) -> Result<AutoLaunch, String> {
-    let exe = std::env::current_exe().and_then(|path| path.canonicalize()).map_err(|error| error.to_string())?;
+    let exe = match appimage_path() {
+        Some(path) => path,
+        None => std::env::current_exe().and_then(|path| path.canonicalize()).map_err(|error| error.to_string())?,
+    };
     let mut builder = AutoLaunchBuilder::new();
     builder.set_app_name(&app.package_info().name).set_app_path(&launch_path(&exe)).set_args(&[AUTOSTART_ARG]);
     // Kurulum kullanıcı başına; varsayılan kip yönetici yetkisi varsa HKLM'ye yazıyordu.
@@ -41,12 +45,24 @@ fn build(app: &AppHandle) -> Result<AutoLaunch, String> {
     builder.build().map_err(|error| error.to_string())
 }
 
+/// AppImage çalışırken `current_exe` her açılışta değişen geçici bağlama
+/// noktasını gösterir; girişte açılacak olan AppImage dosyasının kendisidir.
+fn appimage_path() -> Option<PathBuf> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    std::env::var_os("APPIMAGE").map(PathBuf::from)
+}
+
 /// Windows'ta `canonicalize` `\\?\C:\...` biçimi verir; Run kaydında bu önekli,
 /// tırnaksız yolla girişte uygulama açılmadı. Önek atılır, boşluklu yol için tırnaklanır.
 fn launch_path(exe: &Path) -> String {
     let path = exe.display().to_string();
     if cfg!(windows) {
         format!("\"{}\"", path.strip_prefix(r"\\?\").unwrap_or(&path))
+    } else if cfg!(target_os = "linux") && path.contains(' ') {
+        // .desktop `Exec=` satırında boşluklu yol tırnaklanmazsa argümanlara bölünür.
+        format!("\"{path}\"")
     } else {
         path
     }

@@ -1,5 +1,5 @@
 // Açılış ve yönlendirme: eşleşme yoksa ya da cihaz eklenirken sihirbaz, yoksa ana ekran; Ayarlar üstte kayar.
-import { isMac, setUi, start, store, subscribe } from "./api.js";
+import { isLinux, isMac, setUi, start, store, subscribe } from "./api.js";
 import { rememberUpdate } from "./components/update.js";
 import { fillIcons } from "./icons.js";
 import { bindHome, renderHome } from "./views/home.js";
@@ -39,7 +39,7 @@ function render(state) {
   renderSettings(state);
 }
 
-document.documentElement.dataset.platform = isMac ? "mac" : "windows";
+document.documentElement.dataset.platform = isMac ? "mac" : isLinux ? "linux" : "windows";
 fillIcons();
 bindOnboarding();
 bindHome();

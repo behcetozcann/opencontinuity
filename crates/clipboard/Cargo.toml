@@ -1,6 +1,6 @@
 [package]
 name = "oc-clipboard"
-description = "Sistem panosu için ortak arayüz ve macOS/Windows adaptörleri"
+description = "Sistem panosu için ortak arayüz ve macOS/Windows/Linux (X11) adaptörleri"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -23,6 +23,9 @@ windows = { version = "0.62", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.14", features = ["xfixes"] }
 
 [dev-dependencies]
 # CF_DIB dönüşüm testleri her platformda koşsun.

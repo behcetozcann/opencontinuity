@@ -12,6 +12,7 @@ tauri-build = { version = "2", features = [] }
 anyhow.workspace = true
 auto-launch = "0.6"
 directories = "6"
+oc-clipboard = { path = "../../../crates/clipboard" }
 oc-engine = { path = "../../../crates/engine" }
 oc-pairing = { path = "../../../crates/pairing" }
 serde = { version = "1", features = ["derive"] }

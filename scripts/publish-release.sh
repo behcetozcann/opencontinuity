@@ -26,7 +26,7 @@ mv "$ASSETS/OpenContinuity.app.tar.gz" "$ASSETS/OpenContinuity_${VERSION}_univer
 mv "$ASSETS/OpenContinuity.app.tar.gz.sig" "$ASSETS/OpenContinuity_${VERSION}_universal.app.tar.gz.sig"
 
 for expected in "OpenContinuity_${VERSION}_universal.dmg" "OpenContinuity_${VERSION}_universal.app.tar.gz" \
-  "OpenContinuity_${VERSION}_x64-setup.exe"; do
+  "OpenContinuity_${VERSION}_x64-setup.exe" "OpenContinuity_${VERSION}_amd64.deb" "OpenContinuity_${VERSION}_amd64.AppImage"; do
   [ -f "$ASSETS/$expected" ] || { echo "eksik dosya: $expected (sürüm uyuşmuyor mu?)" >&2; ls "$ASSETS" >&2; exit 1; }
 done
 
@@ -38,6 +38,8 @@ def entry(name):
     return {"signature": (assets / f"{name}.sig").read_text().strip(), "url": f"{base}/{name}"}
 mac = entry(f"OpenContinuity_{version}_universal.app.tar.gz")
 windows = entry(f"OpenContinuity_{version}_x64-setup.exe")
+deb = entry(f"OpenContinuity_{version}_amd64.deb")
+appimage = entry(f"OpenContinuity_{version}_amd64.AppImage")
 latest = {
     "version": version,
     "notes": f"OpenContinuity {tag}",
@@ -45,13 +47,16 @@ latest = {
     "platforms": {
         "darwin-aarch64": mac, "darwin-x86_64": mac,
         "windows-x86_64": windows, "windows-x86_64-nsis": windows,
+        # Güncelleyici önce kurulum türüne özel anahtarı arar; .deb dpkg ile (parola sorar) kurulur.
+        "linux-x86_64": appimage, "linux-x86_64-appimage": appimage, "linux-x86_64-deb": deb,
     },
 }
 (assets / "latest.json").write_text(json.dumps(latest, indent=2) + "\n")
 EOF
 
 NOTES="**Windows:** \`OpenContinuity_${VERSION}_x64-setup.exe\` dosyasını indirip kurun. SmartScreen uyarısında \"Ek bilgi → Yine de çalıştır\".
-**macOS:** \`OpenContinuity_${VERSION}_universal.dmg\` dosyasını indirin, uygulamayı Applications'a sürükleyin. İlk açılışta sağ tık → Aç.
+**macOS:** \`OpenContinuity_${VERSION}_universal.dmg\` dosyasını indirin, uygulamayı Applications'a sürükleyin.
+**Linux (Mint/Ubuntu):** \`OpenContinuity_${VERSION}_amd64.deb\` dosyasına çift tıklayıp kurun. Diğer dağıtımlarda \`.AppImage\` (çalıştırılabilir yapın). X11 oturumu gerekir.
 
 Kurulu uygulamalar yeni sürümü kendiliğinden bulur."
 

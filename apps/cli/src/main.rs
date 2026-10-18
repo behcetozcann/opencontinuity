@@ -53,6 +53,13 @@ async fn main() -> anyhow::Result<()> {
             if let Some(behavior) = oc_clipboard::access_behavior() {
                 println!("macOS pano erişim davranışı: {behavior}");
             }
+            if cfg!(target_os = "linux") {
+                let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "bilinmiyor".into());
+                println!("Linux oturumu: {session}, DISPLAY={}", std::env::var("DISPLAY").unwrap_or_default());
+            }
+            if let Some(warning) = oc_clipboard::session_warning() {
+                println!("Uyarı: {warning}");
+            }
         }
         Command::ClipWatch => clip::watch()?,
         Command::ClipSet { text } => clip::set(&text)?,

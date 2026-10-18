@@ -68,6 +68,8 @@ pub struct View {
     paired_count: u64,
     /// Motor durduysa (ör. port kullanımda) nedeni.
     engine_error: Option<String>,
+    /// Pano bu oturumda güvenilir izlenemiyor (Linux Wayland).
+    session_warning: Option<String>,
     update: updater::UpdateStatus,
 }
 
@@ -137,7 +139,11 @@ fn main() {
             diagnostics::open(&config.config_dir);
             autostart::sync(app.handle(), &config.config_dir);
             let (engine, handle, events) = Engine::new(config, ClipboardSource::System);
-            app.manage(AppState { handle: Mutex::new(handle), view: Mutex::new(View::default()) });
+            let view = View { session_warning: oc_clipboard::session_warning().map(str::to_owned), ..View::default() };
+            if let Some(warning) = &view.session_warning {
+                diagnostics::write(warning);
+            }
+            app.manage(AppState { handle: Mutex::new(handle), view: Mutex::new(view) });
             app.manage(updater::PendingUpdate::default());
             tray::create(app.handle())?;
             spawn_engine(app.handle().clone(), engine, events);

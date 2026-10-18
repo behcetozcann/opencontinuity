@@ -2892,6 +2892,7 @@ dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
  "windows",
+ "x11rb",
 ]
 
 [[package]]
@@ -2998,6 +2999,7 @@ dependencies = [
  "anyhow",
  "auto-launch",
  "directories",
+ "oc-clipboard",
  "oc-engine",
  "oc-pairing",
  "serde",
@@ -5744,6 +5746,23 @@ dependencies = [
  "once_cell",
  "pkg-config",
 ]
+
+[[package]]
+name = "x11rb"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a8885a854a8bfdf87a301e53e41b17c5f8f33639903131338b997b1eb614f44"
+dependencies = [
+ "gethostname",
+ "rustix",
+ "x11rb-protocol",
+]
+
+[[package]]
+name = "x11rb-protocol"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acf4d1bc32aa46eec18caa634ec3cf4c05bfa151f12b93b510b15190f69a1ca8"
 
 [[package]]
 name = "x509-parser"

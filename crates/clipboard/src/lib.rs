@@ -1,18 +1,22 @@
 //! Sistem panosuna düz metin, görsel (PNG) ve dosya listesi okuma/yazma,
 //! değişiklik algılama.
 //!
-//! Değişiklik algılama her iki platformda da ucuz bir sayaçla yapılır
-//! (macOS `changeCount`, Windows `GetClipboardSequenceNumber`); içerik
-//! yalnızca sayaç değişince okunur.
+//! Değişiklik algılama her platformda ucuz bir sayaçla yapılır (macOS
+//! `changeCount`, Windows `GetClipboardSequenceNumber`, Linux XFixes
+//! sahip değişikliği olayları); içerik yalnızca sayaç değişince okunur.
 
 #[cfg(any(windows, test))]
 mod dib;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(any(target_os = "linux", test))]
+mod uri;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
 mod windows_memory;
+#[cfg(target_os = "linux")]
+mod x11;
 
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n'];
 
@@ -59,7 +63,7 @@ pub fn read_after_change(clipboard: &dyn Clipboard) -> anyhow::Result<Content> {
 
 /// PNG'nin IEND bloğuyla biten gerçek uzunluğu. Windows pano belleği
 /// yuvarlanmış boyutla döner; sondaki dolgu yankı karşılaştırmasını bozmasın.
-#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux", test)), allow(dead_code))]
 fn png_length(bytes: &[u8]) -> Option<usize> {
     if !bytes.starts_with(&PNG_SIGNATURE) {
         return None;
@@ -84,8 +88,17 @@ pub fn system() -> anyhow::Result<Box<dyn Clipboard>> {
     return Ok(Box::new(macos::MacClipboard::new()));
     #[cfg(windows)]
     return Ok(Box::new(windows::WindowsClipboard::new()?));
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "linux")]
+    return Ok(Box::new(x11::X11Clipboard::new()?));
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
     anyhow::bail!("bu platformda pano desteği henüz yok");
+}
+
+/// Linux Wayland oturumunda X11 panosu yalnız XWayland uygulamalarını görür;
+/// arka planda izleme güvenilir değil. Diğer durumlarda `None`.
+pub fn session_warning() -> Option<&'static str> {
+    let wayland = cfg!(target_os = "linux") && std::env::var("XDG_SESSION_TYPE").is_ok_and(|kind| kind == "wayland");
+    wayland.then_some("Wayland oturumu: pano izleme güvenilir değil. Oturum açarken X11 (Cinnamon) oturumunu seçin.")
 }
 
 /// macOS 26+ pano erişim davranışı (tanılama için); diğer platformlarda `None`.

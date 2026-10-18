@@ -16,6 +16,7 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 - [x] Pano (Windows dönüşümü, her platformda): PNG → CF_DIB → PNG piksel piksel aynı; saydam piksel DIB'de beyaz; PNG uzunluğu sondaki dolguyu atar.
 - [x] Dosya (v5): liste doğrulaması (`..`, mutlak yol, Windows'ta geçersiz ad, sırasız klasör, büyük/küçük harf tekrarı, sınır); klasör ağacı ada göre sıralı toplanır, çöp dosyalar atlanır; parçalar diske yazılır, fazla veri ve iptal yarım klasörü bırakmaz; budama yalnız tarihli klasörlere dokunur. İki motor arasında klasör + dosya bayt bayt gider, yankı dönmez; yeni kopya süren aktarımı bırakır, yarım klasör kalmaz; 500 MiB üstü `TooLarge`.
 - [x] Grup (v6): üç sahte pano arasında 3.000 olay, ayrı kuyruklar ve karışık sırayla — döngü yok, üç cihaz aynı içerikte biter (eski kural burada ayrışıyordu). Üç motor: Linux yalnız Windows'la eşleşir, Mac onu tanıtmayla öğrenip bağlanır, kopyalar herkese gider, yankı yok; kapalı üye dönünce bekleyen kopyayı alır, diğerleri senkron sürer; kaldırılan üye başka eş tanıtsa da geri gelmez. `peer.json` → `peers.json` taşıma. Kabul eden taraf gruptaki her parmak izini tanır.
+- [ ] Linux pano (CI, Xvfb): iki X istemcisi arasında metin, 3 MiB metin ve 5 MiB PNG (INCR, bayt bayt aynı), dosya listesi, sayaç; xclip ile karşılıklı okuma/yazma. İlk CI koşusu bekleniyor.
 - [x] Heartbeat: susan eş zaman aşımıyla kopuk sayılır (testte kısaltılmış sürelerle: 600 ms; gerçek değer 15 sn).
 
 ## Gerçek cihaz (Mac ↔ Windows, aynı LAN)
@@ -98,6 +99,20 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 | M4 | Üç cihazda her birinden kopya diğer ikisine gider; "Son aktarımlar"da kaynağın adı görünür | [ ] |
 | M5 | Bir cihaz kapalıyken diğer ikisi senkron sürer; ana ekranda "3 cihazdan 2 tanesi bağlı" | [ ] |
 | M6 | Ayarlar › Cihazlar › Bu cihazı kaldır: o cihazla paylaşım durur, diğerleriyle sürer; uygulamayı yeniden açınca geri gelmez | [ ] |
+
+## Gerçek cihaz — Linux (Mint, Cinnamon X11, 0.1.8)
+
+Önce `oc info` ile "Linux oturumu: x11" görülmeli. Pano teşhisi: `oc clip-watch`.
+
+| # | Senaryo | Sonuç |
+|---|---|---|
+| L1 | `.deb` çift tıkla kurulur; menüden açılır; tepside (sağ altta) simge ve menüsü görünür | [ ] |
+| L2 | Gruba katılım: Linux'ta Eşleştirmeye başla, Mac'te Ayarlar › Cihaz ekle → kod → Windows da Linux'u kendiliğinden tanır | [ ] |
+| L3 | Metin: Xed / Firefox'ta kopyala ↔ Mac ve Windows'ta yapıştır (Türkçe + emoji, çok satır) | [ ] |
+| L4 | Görsel: Mint ekran görüntüsü "panoya kopyala" → Mac/Windows; Mac'ten gelen görsel GIMP/LibreOffice'e yapıştırılır | [ ] |
+| L5 | Dosya: Nemo'da Ctrl+C → Mac Finder / Windows Gezgin'e yapıştır; tersi Nemo'ya Ctrl+V ile gelir | [ ] |
+| L6 | Oturumu kapat/aç: kendiliğinden başlar (`~/.config/autostart/OpenContinuity.desktop`) ve bağlanır | [ ] |
+| L7 | Parola yöneticisinden (KeePassXC) kopya gönderilmez | [ ] |
 
 ## Bulgular
 

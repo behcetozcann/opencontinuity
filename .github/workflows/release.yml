@@ -1,6 +1,6 @@
 name: Release
 
-# `v*` etiketi (ya da elle tetikleme) macOS (universal) ve Windows paketlerini
+# `v*` etiketi (ya da elle tetikleme) macOS (universal), Windows ve Linux paketlerini
 # gerçek makinelerde derler, güncelleyici imzalarıyla birlikte iş akışı çıktısı
 # olarak bırakır. Release'i `scripts/publish-release.sh` yükler ve yayınlar
 # (bu depoda Actions token'ı Release oluşturamıyor: "Resource not accessible
@@ -31,6 +31,12 @@ jobs:
             args: --bundles nsis
             artifact: windows
             bundle_dir: target/release/bundle
+          # 22.04: eski glibc'yle derlenen paket Linux Mint 21 (Ubuntu 22.04 tabanlı) ve sonrasında açılır.
+          - platform: ubuntu-22.04
+            rust_targets: ""
+            args: --bundles deb,appimage
+            artifact: linux
+            bundle_dir: target/release/bundle
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +46,11 @@ jobs:
           targets: ${{ matrix.rust_targets }}
 
       - uses: swatinem/rust-cache@v2
+
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
 
       # Noterlik için App Store Connect API anahtarı. tauri boş değişkeni de
       # "tanımlı" sayıp noterliği denediği için noterlik kapalıyken hiç verilmez.
@@ -77,3 +88,7 @@ jobs:
             ${{ matrix.bundle_dir }}/macos/*.app.tar.gz.sig
             ${{ matrix.bundle_dir }}/nsis/*-setup.exe
             ${{ matrix.bundle_dir }}/nsis/*-setup.exe.sig
+            ${{ matrix.bundle_dir }}/deb/*.deb
+            ${{ matrix.bundle_dir }}/deb/*.deb.sig
+            ${{ matrix.bundle_dir }}/appimage/*.AppImage
+            ${{ matrix.bundle_dir }}/appimage/*.AppImage.sig

@@ -30,6 +30,14 @@ const localNetworkNotice = (detail) => ({
   actions: [{ label: "Ayarları aç", primary: true, run: () => invoke("open_local_network_settings") }],
 });
 
+const sessionNotice = (warning) => ({
+  tone: "warning",
+  title: "Pano izlenemiyor",
+  text: "Bu masaüstü oturumu (Wayland) arka plandaki uygulamaların panoyu izlemesine izin vermiyor. Oturumu kapatın, giriş ekranında X11 (Cinnamon) oturumunu seçin.",
+  detail: warning,
+  actions: [],
+});
+
 function pairingNotice(error) {
   let text = "Eşleştirme tamamlanamadı. Tekrar deneyin.";
   if (/karşı cihaz reddetti/i.test(error)) text = "Diğer bilgisayarda kodlar onaylanmadı. Hiçbir şey kaydedilmedi.";
@@ -39,9 +47,10 @@ function pairingNotice(error) {
   return { tone: "error", title: "Eşleştirilemedi", text, detail: error, actions: [] };
 }
 
-/** Görünümden gösterilecek kartı seçer: motor hatası > yerel ağ izni > güncelleme. */
+/** Görünümden gösterilecek kartı seçer: motor hatası > oturum > yerel ağ izni > güncelleme. */
 export function pickNotice(view, { includePairing }) {
   if (view.engine_error) return engineNotice(view.engine_error);
+  if (view.session_warning) return sessionNotice(view.session_warning);
   const networkError = [...view.snapshot.peers.map((peer) => peer.link_error), view.pairing_error].find((error) => error && LOCAL_NETWORK.test(error));
   if (isMac && networkError) return localNetworkNotice(networkError);
   if (updateNeedsAttention(view.update)) return { update: true };
