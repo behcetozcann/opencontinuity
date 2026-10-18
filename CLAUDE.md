@@ -31,9 +31,9 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 
 ## Durum (2026-10-18)
 
-Faz 1 kodu `main`'de; depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: v0.1.1. v0.1.2 (yeni arayüz + Developer ID imzası + noterlik) derleniyor; ilk noterlik Apple'da bekliyor.
+Faz 1 kodu `main`'de; depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: v0.1.1. v0.1.2 (yeni arayüz + Developer ID imzası + noterlik) yayınlanmadı: run 39071029682'nin macOS işi noterliği 6 saat bekleyip zaman aşımıyla iptal oldu (Windows işi başarılı). Hesabın ilk iki noterlik gönderimi (2026-10-17 21:11 / 21:35 UTC) Apple'da "In Progress".
 
-Sıradaki: v0.1.2 yayını → Mac'te Yerel Ağ iznini bir kez ver (imza artık sabit) → Windows'u güncelle → sihirbazla eşleştir → `docs/test-plan.md` Faz 1 tablosu (F1–F12).
+Sıradaki: `scripts/notary-status.sh` "Accepted" gösterince `gh run rerun 39071029682 -R behcetozcann/opencontinuity` (ya da yeni `gh workflow run release.yml --ref v0.1.2`) → başarılıysa `scripts/publish-release.sh v0.1.2 --publish` → Mac'te Yerel Ağ iznini bir kez ver (imza artık sabit) → Windows'u güncelle → sihirbazla eşleştir → `docs/test-plan.md` Faz 1 tablosu (F1–F12).
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
 
