@@ -30,7 +30,7 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 - Gerçek cihaz testi yapılmadıysa `docs/test-plan.md`'de işaretlenmez.
 - Dosya başına 300 satırı geçme.
 
-## Durum (2026-10-18, oturum sonu)
+## Durum (2026-10-19, oturum sonu)
 
 Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.7** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ve 0.1.7'den beri **noterlikli** (DMG içindeki uygulama `spctl`: accepted, Notarized Developer ID; staple doğrulandı).
 
@@ -56,10 +56,12 @@ Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3
 - Arayüz: grupta cihaz etiketleri, "Son aktarımlar"da kaynak adı, Ayarlar › Cihazlar (kart başına kaldır) + Cihaz ekle. Chrome önizlemesiyle doğrulandı (sahte Tauri: scratchpad `preview1/mock.js`).
 - Gerçek cihaz testi yok: `docs/test-plan.md` M1–M6.
 
-Linux (2026-10-19, `multi-device` dalı): Linux Mint / Cinnamon X11 hedef. `crates/clipboard/src/x11/` (x11rb; XFixes sayaç, sahip iş parçacığı + INCR, `image/png` baytları aynen, dosyalar `x-special/gnome-copied-files` + `text/uri-list`), `uri.rs` (testli). Wayland oturumunda arayüz uyarı kartı. Paket: `deb` + `AppImage` (`ubuntu-22.04`), güncelleyici ikisini de destekler (deb pkexec ile parola sorar), `latest.json`'da `linux-x86_64(-deb|-appimage)`. CI'a ubuntu + `xvfb-run` eklendi, `oc-linux` artifact'ı. **CI hiç koşmadı** (dal push'lanmadı) — engine/masaüstü Linux derlemesi ve X11 testleri ilk CI koşusunda doğrulanacak.
+Linux (2026-10-19, `multi-device` dalı): Linux Mint / Cinnamon X11 hedef. `crates/clipboard/src/x11/` (x11rb; XFixes sayaç, sahip iş parçacığı + INCR, `image/png` baytları aynen, dosyalar `x-special/gnome-copied-files` + `text/uri-list`), `uri.rs` (testli). Wayland oturumunda arayüz uyarı kartı. Paket: `deb` + `AppImage` (`ubuntu-22.04`), güncelleyici ikisini de destekler (deb pkexec ile parola sorar), `latest.json`'da `linux-x86_64(-deb|-appimage)`. CI'a ubuntu + `xvfb-run` eklendi, `oc-linux` artifact'ı. Dal push'landı; CI 3 platformda yeşil (son 3 koşu, 9/9 iş); X11 pano testleri Xvfb'de gerçekten koşuyor ve geçiyor. Linux masaüstü paketi (`release.yml`) henüz hiç derlenmedi; gerçek Linux cihazda denenmedi.
+
+Kararsız testler (2026-10-19, çözüldü): yük altında bir uç el sıkışmayı zaman aşımıyla bırakırken öteki tamamlayıp kısa süre "bağlı" görünüyor (üretimde EOF ile kendini düzeltir). Testler artık `Node::wait_current` (son durum, kuyruktaki eski durum değil) ile iki ucu bekler, `Node::stop` motorun bitmesini bekler. Yerel yük testi: aynı anda 12 süreç → 2/240; izlenen tek hata `free_port` çakışması (test altyapısı).
 
 Sıradaki:
-1. Dalı push'la (kullanıcı onayı) → CI (Linux derleme + Xvfb testleri) → release.yml'i dalda elle tetikle → kullanıcı Linux'ta `.deb` kurup test-plan L1–L7.
+1. `Cargo.toml` sürümünü 0.1.8 yap → `release.yml`'i `multi-device` dalında `-f notarize=false` ile tetikle (yayınlama yok) → kullanıcı Linux Mint'te `.deb`'i Actions artifact'ından kurup L1–L7; Mac/Windows'a da aynı derleme kurulmalı (v6, 0.1.7 ile bağlanmaz). Kullanıcıya soruldu, cevap bekleniyor.
 2. Toplu gerçek cihaz testi: M1–M6 + kopukken kopya (Mac kapak kapat/aç, bağlanmadan kopyala → Windows'ta yapıştır). Kullanıcı testleri biriktirmek istedi.
 3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 4. Diğer Faz 2: pano geçmişi/tercihler, isteğe bağlı "dosya paylaşımı" anahtarı.
