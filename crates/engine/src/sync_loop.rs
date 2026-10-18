@@ -1,64 +1,60 @@
-//! Eşle bağlantıyı ayakta tutar ve panoyu iki yönde senkronlar.
+//! Gruptaki eşlerle bağlantıları ayakta tutar ve panoyu senkronlar. Her eşle
+//! ayrı bağlantı (tam ağ); yerel kopya bağlı bütün eşlere gider.
 
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use anyhow::{Context as _, anyhow};
 use oc_core::SyncState;
 use oc_discovery::Discovery;
-use oc_pairing::{Identity, Peer, PeerStore, device_id_of};
+use oc_pairing::{Fingerprint, Peer};
 use oc_protocol::Message;
-use oc_transport::{Session, Trust};
+use oc_transport::Session;
 use tokio::net::TcpListener;
-use tokio::time::{Instant, interval, sleep_until, timeout};
+use tokio::time::{interval, sleep_until, timeout};
 
-use crate::events::{Emitter, Event, PeerSummary};
-use crate::link::{Link, LinkEvent, next_event};
-use crate::transfer::Pending;
-use crate::{Command, Context, Flow, Timing, files, next_found, transfer};
+use crate::dial::{Dialed, Dialer};
+use crate::events::{Emitter, Event};
+use crate::group::{Group, Member};
+use crate::link::{self, Link, LinkId};
+use crate::{Command, Context, Flow, files, next_found, transfer};
 
-pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> {
+pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow> {
     let port = context.config.port;
     let timing = context.config.timing;
-    // Port açılamasa da arayüz kayıtlı eşi göstersin.
-    let summary = summary(&peer);
-    context.events.update(|snapshot| {
-        snapshot.peer = Some(summary);
-        snapshot.connected_ip = None;
-        snapshot.link_error = None;
-    });
+    let own = context.identity.fingerprint();
+    let mut group = Group::new(own, timing, peers);
+    // Port açılamasa da arayüz kayıtlı eşleri göstersin.
+    context.events.update(|snapshot| snapshot.peers = group.summaries());
     let listener = TcpListener::bind(("0.0.0.0", port)).await.with_context(|| {
         format!("port {port} başka bir program tarafından kullanılıyor (açık kalmış bir `oc run` ya da ikinci OpenContinuity olabilir)")
     })?;
-    let discovery = if context.config.discovery {
-        Some(Discovery::start(&context.identity.name, &context.identity.fingerprint(), port, false)?)
-    } else {
-        None
-    };
+    let discovery = if context.config.discovery { Some(Discovery::start(&context.identity.name, &own, port, false)?) } else { None };
     let mut discovered = discovery.as_ref().map(Discovery::browse).transpose()?;
 
     files::clean_partials(&context.config.files_dir);
     let mut state = SyncState::new(context.identity.device_id());
-    let peer_device_id = device_id_of(&peer.fingerprint);
-    let peer_hex = hex::encode(peer.fingerprint);
-    let trust = Trust::Pinned(peer.fingerprint);
-    // Yalnız küçük parmak izli taraf bağlanır; çift bağlantı yarışı olmaz.
-    let dialer = context.identity.fingerprint() < peer.fingerprint;
-    let mut addresses: Vec<SocketAddr> = peer.last_address.iter().filter_map(|address| address.parse().ok()).collect();
-    let mut link: Option<Link> = None;
-    let mut pending: Option<Pending> = None;
-    let mut retry = Retry::new(timing);
+    let (outlets, mut inlets) = link::channels();
+    let (dialer, mut dialed) = Dialer::new(context.identity.clone(), port, timing.dial_timeout);
+    let mut next_link_id: LinkId = 0;
+    let mut reported: Option<u64> = None;
     let mut heartbeat = interval(timing.heartbeat_interval);
 
-    let role = if dialer { "bağlanan" } else { "bekleyen" };
-    context.events.diagnostic(format!("Çalışıyor. Eş: {} ({role} taraf).", peer.name));
+    let names: Vec<&str> = group.members.iter().map(|member| member.peer.name.as_str()).collect();
+    context.events.diagnostic(format!("Çalışıyor. Grup: {}.", names.join(", ")));
     loop {
+        let next_dial = group.next_dial();
         tokio::select! {
             command = context.commands.recv() => match command {
                 None | Some(Command::Shutdown) => return Ok(Flow::Shutdown),
-                Some(Command::Unpair) => {
-                    context.store.remove()?;
-                    return Ok(Flow::Continue);
+                Some(Command::StartPairing { address }) => return Ok(Flow::Pair { address }),
+                Some(Command::Unpair { fingerprint_prefix }) => {
+                    if let Some(fingerprint) = group.by_prefix(&fingerprint_prefix) {
+                        context.store.remove(&fingerprint)?;
+                        group.remove(&fingerprint);
+                        if group.members.is_empty() {
+                            return Ok(Flow::Continue);
+                        }
+                    }
                 }
                 Some(Command::Pause) => context.events.update(|snapshot| snapshot.paused = true),
                 Some(Command::Resume) => context.events.update(|snapshot| snapshot.paused = false),
@@ -66,193 +62,203 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
             },
             accepted = listener.accept() => {
                 let (tcp, remote) = accepted?;
+                let trust = group.trust();
                 match timeout(timing.handshake_timeout, oc_transport::accept(tcp, &context.identity, trust, port)).await {
                     Ok(Ok(session)) => {
                         let address = SocketAddr::new(remote.ip(), session.peer_listen_port);
-                        link = activate(context, &mut peer, &mut addresses, session, address, &state, &mut pending).await?;
+                        let id = take_id(&mut next_link_id);
+                        activate(context, &mut group, &outlets, &state, session, address, id).await?;
                     }
                     Ok(Err(error)) => context.events.diagnostic(format!("Reddedilen bağlantı: {} ({error})", remote.ip())),
                     Err(_) => context.events.diagnostic(format!("Reddedilen bağlantı: {} (zaman aşımı)", remote.ip())),
                 }
             }
             Some(found) = next_found(&mut discovered) => {
-                if found.fingerprint_hex == peer_hex {
+                if let Some(member) = group.members.iter_mut().find(|member| member.hex() == found.fingerprint_hex) {
                     let listed: Vec<String> = found.addresses.iter().map(ToString::to_string).collect();
-                    context.events.diagnostic(format!("Eş ağda bulundu: {}", listed.join(", ")));
+                    context.events.diagnostic(format!("{} ağda bulundu: {}", member.peer.name, listed.join(", ")));
                     for address in found.addresses.into_iter().rev() {
-                        prepend_unique(&mut addresses, address);
+                        member.prepend_address(address);
                     }
-                    if dialer && link.is_none() {
-                        retry.dial_now();
+                    if member.link.is_none() {
+                        member.retry.dial_now();
                     }
                 }
             }
-            _ = sleep_until(retry.next_dial), if dialer && link.is_none() => {
-                match dial(&addresses, &context.identity, trust, port, timing.dial_timeout).await {
+            _ = sleep_until(next_dial.unwrap_or_else(tokio::time::Instant::now)), if next_dial.is_some() => {
+                let now = tokio::time::Instant::now();
+                for member in group.members.iter_mut().filter(|member| member.wants_dial() && member.retry.next_dial <= now) {
+                    member.dialing = true;
+                    dialer.spawn(member.peer.fingerprint, member.addresses.clone());
+                }
+            }
+            Some(Dialed { fingerprint, result }) = dialed.recv() => {
+                let Some(member) = group.by_fingerprint(&fingerprint) else { continue };
+                member.dialing = false;
+                match result {
+                    // Bu arada eş bize bağlandıysa yeni oturum bırakılır.
+                    Ok(_) if member.link.is_some() => {}
                     Ok((session, address)) => {
-                        link = activate(context, &mut peer, &mut addresses, session, address, &state, &mut pending).await?;
+                        let id = take_id(&mut next_link_id);
+                        activate(context, &mut group, &outlets, &state, session, address, id).await?;
                     }
                     Err(failures) => {
-                        context.events.diagnostic(format!("Bağlanılamadı: {failures}"));
-                        context.events.update(|snapshot| snapshot.link_error = Some(failures));
-                        retry.failed();
+                        context.events.diagnostic(format!("{} bağlanılamadı: {failures}", member.peer.name));
+                        member.error = Some(failures);
+                        member.retry.failed();
                     }
                 }
             }
             copy = context.clipboard.local_copies.recv() => {
                 let copy = copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
-                if let Err(error) = transfer::send_local(context, &mut state, &mut link, &mut pending, copy).await {
-                    disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
+                for (fingerprint, reason) in transfer::send_local(context, &mut state, &mut group, copy).await? {
+                    if let Some(member) = group.by_fingerprint(&fingerprint) {
+                        disconnect(&context.events, member, &reason);
+                    }
                 }
             }
-            event = next_event(&mut link) => match event {
-                LinkEvent::Completed(completion) => {
-                    if let Some(reason) = transfer::on_completion(context, completion) {
-                        disconnect(&mut context.events, &mut link, &mut retry, &reason);
-                    }
+            Some((id, completion)) = inlets.completions.recv() => {
+                if let Some(reason) = transfer::on_completion(context, completion, &mut reported)
+                    && let Some(member) = group.by_link(id)
+                {
+                    disconnect(&context.events, member, &reason);
                 }
-                LinkEvent::Incoming(message) => match message {
-                    Ok(Message::Clip(event)) => transfer::apply_remote(context, &mut state, &peer_device_id, event)?,
-                    Ok(notice @ (Message::ImageStart { .. } | Message::FilesStart { .. } | Message::TransferCancel)) => {
-                        transfer::on_notice(context, &notice);
+            }
+            Some((id, message)) = inlets.incoming.recv() => {
+                // Kapatılmış bağlantının kanalda kalmış mesajı.
+                let Some(member) = group.by_link(id) else { continue };
+                match message {
+                    Ok(Message::Peers { peers }) => {
+                        let from = member.peer.fingerprint;
+                        introduce(context, &mut group, &from, peers)?;
                     }
-                    Ok(Message::Clock { lamport }) => {
-                        state.observe_peer_clock(lamport);
-                        // Bağlantı ancak eşten ilk geçerli mesaj gelince sağlıklı sayılır;
-                        // el sıkışmadan hemen sonra kopan bağlantı beklemeyi sıfırlamaz.
-                        retry.healthy();
-                    }
-                    Ok(Message::Ping { nonce }) => {
-                        if let Some(active) = link.as_mut()
-                            && let Err(error) = active.post(Message::Pong { nonce })
-                        {
-                            disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
-                        }
-                    }
-                    Ok(_) => {}
-                    Err(error) => disconnect(&mut context.events, &mut link, &mut retry, &error.to_string()),
-                },
-            },
+                    other => on_message(context, &mut state, member, other)?,
+                }
+            }
             _ = heartbeat.tick() => {
-                let Some(active) = link.as_mut() else { continue };
-                if active.last_seen().elapsed() > timing.heartbeat_timeout {
-                    let reason = format!("eş {} sn yanıt vermedi", timing.heartbeat_timeout.as_secs_f32());
-                    disconnect(&mut context.events, &mut link, &mut retry, &reason);
-                } else if let Err(error) = active.post(Message::Ping { nonce: 0 }) {
-                    disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
+                for member in &mut group.members {
+                    let Some(active) = member.link.as_mut() else { continue };
+                    if active.last_seen().elapsed() > timing.heartbeat_timeout {
+                        let reason = format!("eş {} sn yanıt vermedi", timing.heartbeat_timeout.as_secs_f32());
+                        disconnect(&context.events, member, &reason);
+                    } else if let Err(error) = active.post(Message::Ping { nonce: 0 }) {
+                        disconnect(&context.events, member, &error.to_string());
+                    }
                 }
             }
         }
+        context.events.update(|snapshot| snapshot.peers = group.summaries());
     }
 }
 
-/// Oturumu başlatır, saatimizi ve kopukken yapılan kopyayı gönderir;
-/// gönderilemezse oturum kurulmamış sayılır.
-async fn activate(
-    context: &mut Context,
-    peer: &mut Peer,
-    addresses: &mut Vec<SocketAddr>,
-    session: Session,
-    address: SocketAddr,
-    state: &SyncState,
-    pending: &mut Option<Pending>,
-) -> anyhow::Result<Option<Link>> {
-    remember_address(&context.store, peer, addresses, address)?;
-    let mut link = Link::start(session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone());
-    if let Err(error) = link.send(Message::Clock { lamport: state.clock() }).await {
-        context.events.diagnostic(format!("Saat gönderilemedi, bağlantı kapatıldı: {error}"));
-        return Ok(None);
-    }
-    if let Err(error) = transfer::send_pending(context, &mut link, pending) {
-        context.events.diagnostic(format!("Bekleyen kopya gönderilemedi, bağlantı kapatıldı: {error}"));
-        return Ok(None);
-    }
-    let summary = summary(peer);
-    context.events.update(|snapshot| {
-        snapshot.peer = Some(summary);
-        snapshot.connected_ip = Some(address.ip().to_string());
-        snapshot.link_error = None;
-    });
-    Ok(Some(link))
+fn take_id(next: &mut LinkId) -> LinkId {
+    *next += 1;
+    *next
 }
 
-/// Adresleri sırayla dener; hepsi başarısızsa her adresin hatasını döner.
-async fn dial(
-    addresses: &[SocketAddr],
-    identity: &Identity,
-    trust: Trust,
-    listen_port: u16,
-    dial_timeout: Duration,
-) -> Result<(Session, SocketAddr), String> {
-    if addresses.is_empty() {
-        return Err("bilinen adres yok; eş ağda henüz bulunamadı".into());
-    }
-    let mut failures = Vec::new();
-    for address in addresses {
-        let attempt = oc_transport::connect(*address, identity, trust, listen_port);
-        match timeout(dial_timeout, attempt).await {
-            Ok(Ok(session)) => return Ok((session, *address)),
-            Ok(Err(error)) => failures.push(format!("{address} ({error:#})")),
-            Err(_) => failures.push(format!("{address} (zaman aşımı)")),
+fn on_message(context: &mut Context, state: &mut SyncState, member: &mut Member, message: anyhow::Result<Message>) -> anyhow::Result<()> {
+    match message {
+        Ok(Message::Clip(event)) => transfer::apply_remote(context, state, (&member.device_id, &member.peer.name), event)?,
+        Ok(notice @ (Message::ImageStart { .. } | Message::FilesStart { .. } | Message::TransferCancel)) => {
+            transfer::on_notice(context, &notice, &member.peer.name);
         }
-    }
-    Err(failures.join(", "))
-}
-
-fn disconnect(events: &mut Emitter, link: &mut Option<Link>, retry: &mut Retry, reason: &str) {
-    if link.take().is_some() {
-        events.emit(Event::Disconnected { reason: reason.to_owned() });
-        events.update(|snapshot| snapshot.connected_ip = None);
-    }
-    retry.failed();
-}
-
-fn remember_address(store: &PeerStore, peer: &mut Peer, addresses: &mut Vec<SocketAddr>, address: SocketAddr) -> anyhow::Result<()> {
-    prepend_unique(addresses, address);
-    let text = address.to_string();
-    if peer.last_address.as_deref() != Some(text.as_str()) {
-        peer.last_address = Some(text);
-        store.save(peer)?;
+        Ok(Message::Clock { lamport }) => {
+            state.observe_peer_clock(lamport);
+            // Bağlantı ancak eşten ilk geçerli mesaj gelince sağlıklı sayılır;
+            // el sıkışmadan hemen sonra kopan bağlantı beklemeyi sıfırlamaz.
+            member.retry.healthy();
+        }
+        Ok(Message::Ping { nonce }) => {
+            if let Some(active) = member.link.as_mut()
+                && let Err(error) = active.post(Message::Pong { nonce })
+            {
+                disconnect(&context.events, member, &error.to_string());
+            }
+        }
+        Ok(_) => {}
+        Err(error) => disconnect(&context.events, member, &error.to_string()),
     }
     Ok(())
 }
 
-fn prepend_unique(addresses: &mut Vec<SocketAddr>, address: SocketAddr) {
-    addresses.retain(|existing| *existing != address);
-    addresses.insert(0, address);
+/// Oturumu başlatır; saatimizi, grup listesini ve kopukken yapılan kopyayı
+/// gönderir. Gönderilemezse oturum kurulmamış sayılır.
+async fn activate(
+    context: &mut Context,
+    group: &mut Group,
+    outlets: &link::Outlets,
+    state: &SyncState,
+    session: Session,
+    address: SocketAddr,
+    id: LinkId,
+) -> anyhow::Result<()> {
+    let fingerprint = session.peer_fingerprint;
+    let introductions = group.introductions_for(&fingerprint);
+    // Kabul ederken parmak izi grup listesiyle doğrulandı; bu arada kaldırıldıysa bırakılır.
+    let Some(member) = group.by_fingerprint(&fingerprint) else { return Ok(()) };
+    member.prepend_address(address);
+    let text = address.to_string();
+    if member.peer.last_address.as_deref() != Some(text.as_str()) {
+        member.peer.last_address = Some(text);
+        context.store.upsert(&member.peer)?;
+    }
+    let mut link = Link::start(id, session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone(), outlets);
+    let greeting = async {
+        link.send(Message::Clock { lamport: state.clock() }).await?;
+        link.send(Message::Peers { peers: introductions }).await
+    };
+    if let Err(error) = greeting.await {
+        context.events.diagnostic(format!("{} ile el sıkışma tamamlanamadı, bağlantı kapatıldı: {error}", member.peer.name));
+        return Ok(());
+    }
+    if let Err(error) = transfer::send_pending(context, &mut link, &mut member.pending) {
+        context.events.diagnostic(format!("Bekleyen kopya gönderilemedi, bağlantı kapatıldı: {error}"));
+        return Ok(());
+    }
+    context.events.diagnostic(format!("Bağlandı: {} ({address})", member.peer.name));
+    member.error = None;
+    member.link = Some(link);
+    Ok(())
 }
 
-fn summary(peer: &Peer) -> PeerSummary {
-    PeerSummary {
-        name: peer.name.clone(),
-        fingerprint_prefix: hex::encode(peer.fingerprint)[..16].to_owned(),
-        address: peer.last_address.clone(),
+/// Gruptaki bir eşin tanıttığı cihazları ekler ve bağlı diğer eşlere de duyurur.
+fn introduce(context: &mut Context, group: &mut Group, from: &Fingerprint, peers: Vec<oc_protocol::PeerInfo>) -> anyhow::Result<()> {
+    let own = context.identity.fingerprint();
+    let via = group.by_fingerprint(from).map(|member| member.peer.name.clone()).unwrap_or_default();
+    let mut added = false;
+    for info in peers {
+        if info.fingerprint == own {
+            continue;
+        }
+        let peer = Peer { name: info.name, fingerprint: info.fingerprint, last_address: info.address };
+        if context.store.add_introduced(&peer)? {
+            context.events.emit(Event::PeerAdded { peer: peer.name.clone(), via: via.clone() });
+            group.add(peer);
+            added = true;
+        }
     }
+    if !added {
+        return Ok(());
+    }
+    for index in 0..group.members.len() {
+        let to = group.members[index].peer.fingerprint;
+        if &to == from {
+            continue;
+        }
+        let introductions = group.introductions_for(&to);
+        let member = &mut group.members[index];
+        if let Some(active) = member.link.as_mut()
+            && let Err(error) = active.post(Message::Peers { peers: introductions })
+        {
+            disconnect(&context.events, member, &error.to_string());
+        }
+    }
+    Ok(())
 }
 
-/// Bağlanan tarafın yeniden deneme zamanlaması: her başarısızlıkta bekleme ikiye katlanır.
-struct Retry {
-    next_dial: Instant,
-    backoff: Duration,
-    min: Duration,
-    max: Duration,
-}
-
-impl Retry {
-    fn new(timing: Timing) -> Self {
-        Self { next_dial: Instant::now(), backoff: timing.min_backoff, min: timing.min_backoff, max: timing.max_backoff }
+fn disconnect(events: &Emitter, member: &mut Member, reason: &str) {
+    if member.link.take().is_some() {
+        events.emit(Event::Disconnected { peer: member.peer.name.clone(), reason: reason.to_owned() });
     }
-
-    fn failed(&mut self) {
-        self.next_dial = Instant::now() + self.backoff;
-        self.backoff = (self.backoff * 2).min(self.max);
-    }
-
-    fn healthy(&mut self) {
-        self.backoff = self.min;
-    }
-
-    fn dial_now(&mut self) {
-        self.next_dial = Instant::now();
-    }
+    member.retry.failed();
 }

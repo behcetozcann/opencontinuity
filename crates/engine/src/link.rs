@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use oc_protocol::{Assembler, ClipEvent, ContentKind, Message, Payload, read_message};
 use oc_transport::{Session, Stream};
 use tokio::io::ReadHalf;
@@ -21,10 +21,30 @@ use crate::writer::{Job, write_loop};
 
 pub use crate::writer::{Completion, Outcome};
 
+/// Bağlantının kimliği; aynı eşle yeniden kurulan bağlantının eski mesajları ayırt edilir.
+pub type LinkId = u64;
+
+/// Bütün bağlantıların okuma ve yazma sonuçları bu ortak kanallara bağlantı kimliğiyle düşer.
+#[derive(Clone)]
+pub struct Outlets {
+    pub incoming: mpsc::Sender<(LinkId, anyhow::Result<Message>)>,
+    pub completions: mpsc::UnboundedSender<(LinkId, Completion)>,
+}
+
+pub struct Inlets {
+    pub incoming: mpsc::Receiver<(LinkId, anyhow::Result<Message>)>,
+    pub completions: mpsc::UnboundedReceiver<(LinkId, Completion)>,
+}
+
+pub fn channels() -> (Outlets, Inlets) {
+    let (incoming_sender, incoming) = mpsc::channel(16);
+    let (completion_sender, completions) = mpsc::unbounded_channel();
+    (Outlets { incoming: incoming_sender, completions: completion_sender }, Inlets { incoming, completions })
+}
+
 pub struct Link {
+    pub id: LinkId,
     jobs: mpsc::UnboundedSender<Job>,
-    incoming: mpsc::Receiver<anyhow::Result<Message>>,
-    completions: mpsc::UnboundedReceiver<Completion>,
     /// Her çerçevede güncellenir; uzun aktarım sürerken eş canlı sayılır.
     last_seen: Arc<Mutex<Instant>>,
     reader: JoinHandle<()>,
@@ -33,15 +53,14 @@ pub struct Link {
 
 impl Link {
     /// `files_dir`: gelen dosyaların yazılacağı kök.
-    pub fn start(session: Session, send_timeout: Duration, files_dir: PathBuf) -> Self {
+    pub fn start(id: LinkId, session: Session, send_timeout: Duration, files_dir: PathBuf, outlets: &Outlets) -> Self {
         let (reader_half, writer_half) = session.split();
-        let (sender, incoming) = mpsc::channel(16);
         let last_seen = Arc::new(Mutex::new(Instant::now()));
+        let sender = Tagged { id, sender: outlets.incoming.clone() };
         let reader = tokio::spawn(read_loop(reader_half, sender, last_seen.clone(), FileSink::new(files_dir)));
         let (jobs, job_receiver) = mpsc::unbounded_channel();
-        let (completion_sender, completions) = mpsc::unbounded_channel();
-        let writer = tokio::spawn(write_loop(writer_half, job_receiver, completion_sender, send_timeout));
-        Self { jobs, incoming, completions, last_seen, reader, writer }
+        let writer = tokio::spawn(write_loop(id, writer_half, job_receiver, outlets.completions.clone(), send_timeout));
+        Self { id, jobs, last_seen, reader, writer }
     }
 
     /// Yazılana kadar bekler (el sıkışma sonrası `Clock`, eşleştirme kararı).
@@ -62,10 +81,6 @@ impl Link {
         self.jobs.send(Job::Clip { event, sources }).map_err(|_| anyhow!("yazma görevi bitti"))
     }
 
-    pub async fn recv(&mut self) -> anyhow::Result<Message> {
-        self.incoming.recv().await.unwrap_or_else(|| Err(anyhow!("okuma görevi bitti")))
-    }
-
     pub fn last_seen(&self) -> Instant {
         *self.last_seen.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -78,9 +93,21 @@ impl Drop for Link {
     }
 }
 
+/// Okuma görevinin döngüye giden ucu.
+struct Tagged {
+    id: LinkId,
+    sender: mpsc::Sender<(LinkId, anyhow::Result<Message>)>,
+}
+
+impl Tagged {
+    async fn send(&self, message: anyhow::Result<Message>) -> anyhow::Result<()> {
+        self.sender.send((self.id, message)).await.map_err(|_| anyhow!("döngü kapandı"))
+    }
+}
+
 async fn read_loop(
     mut reader: ReadHalf<Stream>,
-    sender: mpsc::Sender<anyhow::Result<Message>>,
+    sender: Tagged,
     last_seen: Arc<Mutex<Instant>>,
     mut sink: FileSink,
 ) {
@@ -113,13 +140,13 @@ async fn handle(
     message: Message,
     assembler: &mut Assembler,
     sink: &mut FileSink,
-    sender: &mpsc::Sender<anyhow::Result<Message>>,
+    sender: &Tagged,
 ) -> anyhow::Result<Option<Message>> {
     match message {
         Message::FilesStart { event_id, lamport, files } => {
             // Başlangıç ayrıca iletilir: arayüz "alınıyor" gösterebilsin.
             let notice = Message::FilesStart { event_id, lamport, files: files.clone() };
-            sender.send(Ok(notice)).await.context("döngü kapandı")?;
+            sender.send(Ok(notice)).await?;
             Ok(sink.start(event_id, lamport, files).await?.map(completed_files))
         }
         Message::FileChunk { data } => Ok(sink.chunk(&data.0).await?.map(completed_files)),
@@ -129,7 +156,7 @@ async fn handle(
             Ok(Some(Message::TransferCancel))
         }
         Message::ImageStart { .. } => {
-            sender.send(Ok(message.clone())).await.context("döngü kapandı")?;
+            sender.send(Ok(message.clone())).await?;
             assembler.push(message)
         }
         other => assembler.push(other),
@@ -138,21 +165,6 @@ async fn handle(
 
 fn completed_files(completed: crate::files::Completed) -> Message {
     Message::Clip(ClipEvent { event_id: completed.event_id, lamport: completed.lamport, payload: Payload::Files(completed.list) })
-}
-
-pub enum LinkEvent {
-    Incoming(anyhow::Result<Message>),
-    Completed(Completion),
-}
-
-/// Gelen mesaj ya da biten gönderim. Bağlantı yoksa hiç dönmez.
-pub async fn next_event(link: &mut Option<Link>) -> LinkEvent {
-    let Some(link) = link.as_mut() else { return std::future::pending().await };
-    tokio::select! {
-        message = link.incoming.recv() => LinkEvent::Incoming(message.unwrap_or_else(|| Err(anyhow!("okuma görevi bitti")))),
-        // Yazma görevi bittiyse okuma da hata verecek; o tarafı bekle.
-        Some(completion) = link.completions.recv() => LinkEvent::Completed(completion),
-    }
 }
 
 /// Arayüze "gönderiliyor/alınıyor" gösterilecek kadar uzun süren içerik mi.

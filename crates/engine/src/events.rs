@@ -11,7 +11,11 @@ use tokio::sync::mpsc::UnboundedSender;
 pub struct PeerSummary {
     pub name: String,
     pub fingerprint_prefix: String,
+    /// Bağlıysa bağlantının adresi, değilse son bilinen adres.
     pub address: Option<String>,
+    pub connected: bool,
+    /// Son bağlanma denemesinin hatası; bağlanınca temizlenir.
+    pub link_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -30,12 +34,16 @@ pub enum PairingStage {
 pub struct Snapshot {
     pub device_name: String,
     pub fingerprint_prefix: String,
-    pub peer: Option<PeerSummary>,
-    pub connected_ip: Option<String>,
+    /// Gruptaki diğer cihazlar; boşsa eşleşme yok.
+    pub peers: Vec<PeerSummary>,
     pub paused: bool,
     pub pairing: Option<PairingStage>,
-    /// Eşe son bağlanma denemesinin hatası; bağlanınca temizlenir.
-    pub link_error: Option<String>,
+}
+
+impl Snapshot {
+    pub fn connected_count(&self) -> usize {
+        self.peers.iter().filter(|peer| peer.connected).count()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,15 +54,18 @@ pub enum Event {
     /// `items`: dosyada kopyalanan üst düzey öğe sayısı, diğerlerinde 1.
     Sending { content: ContentKind, bytes: u64, items: usize },
     /// Eşten görsel/dosya gelmeye başladı; sonunda `Received`, `Skipped` ya da `Disconnected`.
-    Receiving { content: ContentKind, bytes: u64, items: usize },
+    Receiving { content: ContentKind, bytes: u64, items: usize, from: String },
+    /// Kopya bir eşe ulaştı; aynı kopya için bir kez (ilk teslimde) yayınlanır.
     Sent { content: ContentKind, bytes: u64, items: usize, lamport: u64 },
-    /// `saved_to`: dosyalar geldiyse kaydedildikleri klasör.
-    Received { content: ContentKind, bytes: u64, items: usize, lamport: u64, saved_to: Option<PathBuf> },
+    /// `saved_to`: dosyalar geldiyse kaydedildikleri klasör. `from`: gönderen cihazın adı.
+    Received { content: ContentKind, bytes: u64, items: usize, lamport: u64, from: String, saved_to: Option<PathBuf> },
     /// Kopya sınırı aştığı için gönderilmedi.
     TooLarge { content: ContentKind, bytes: u64, limit: u64 },
     Skipped { reason: String },
-    Disconnected { reason: String },
+    Disconnected { peer: String, reason: String },
     Paired { peer: String },
+    /// Gruptaki bir eş yeni bir cihazı tanıttı.
+    PeerAdded { peer: String, via: String },
     PairingFailed { reason: String },
     Diagnostic { message: String },
 }

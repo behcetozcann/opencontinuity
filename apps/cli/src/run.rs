@@ -9,7 +9,7 @@ use oc_pairing::PeerStore;
 
 pub async fn run() -> anyhow::Result<()> {
     let config = EngineConfig::system()?;
-    if PeerStore::new(&config.config_dir).load()?.is_none() {
+    if PeerStore::new(&config.config_dir).load_all()?.is_empty() {
         bail!("eşleşmiş cihaz yok; önce `oc pair` çalıştır");
     }
     let (engine, _handle, mut events) = Engine::new(config, ClipboardSource::System);
@@ -24,10 +24,8 @@ pub async fn run() -> anyhow::Result<()> {
 fn print_event(event: &Event, previous: &mut Snapshot) {
     match event {
         Event::State(snapshot) => {
-            if previous.connected_ip.is_none()
-                && let (Some(ip), Some(peer)) = (&snapshot.connected_ip, &snapshot.peer)
-            {
-                log(format!("Bağlandı: {} ({ip})", peer.name));
+            if snapshot.connected_count() != previous.connected_count() {
+                log(format!("Bağlı cihaz: {}/{}", snapshot.connected_count(), snapshot.peers.len()));
             }
             if snapshot.paused != previous.paused {
                 log(if snapshot.paused { "Duraklatıldı." } else { "Devam ediyor." }.into());
@@ -35,13 +33,16 @@ fn print_event(event: &Event, previous: &mut Snapshot) {
             *previous = snapshot.clone();
         }
         Event::Sending { content, bytes, items } => log(format!("Gönderiliyor: {content:?}, {items} öğe, {bytes} bayt")),
-        Event::Receiving { content, bytes, items } => log(format!("Alınıyor: {content:?}, {items} öğe, {bytes} bayt")),
+        Event::Receiving { content, bytes, items, from } => log(format!("Alınıyor ({from}): {content:?}, {items} öğe, {bytes} bayt")),
         Event::TooLarge { content, bytes, limit } => log(format!("Çok büyük, gönderilmedi: {content:?}, {bytes} bayt (sınır {limit})")),
         Event::Sent { content, bytes, items, lamport } => log(format!("Gönderildi: {content:?}, {items} öğe, {bytes} bayt (lamport {lamport})")),
-        Event::Received { content, bytes, items, lamport, .. } => log(format!("Alındı: {content:?}, {items} öğe, {bytes} bayt (lamport {lamport})")),
+        Event::Received { content, bytes, items, lamport, from, .. } => {
+            log(format!("Alındı ({from}): {content:?}, {items} öğe, {bytes} bayt (lamport {lamport})"))
+        }
         Event::Skipped { reason } => log(reason.clone()),
-        Event::Disconnected { reason } => log(format!("Bağlantı koptu: {reason}")),
+        Event::Disconnected { peer, reason } => log(format!("Bağlantı koptu ({peer}): {reason}")),
         Event::Paired { peer } => log(format!("Eşleşti: {peer}")),
+        Event::PeerAdded { peer, via } => log(format!("Gruba eklendi: {peer} ({via} tanıttı)")),
         Event::PairingFailed { reason } => log(format!("Eşleştirme başarısız: {reason}")),
         Event::Diagnostic { message } => log(message.clone()),
     }

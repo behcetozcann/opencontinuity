@@ -242,6 +242,19 @@
   -webkit-user-select: text;
 }
 
+/* Grup: cihaz başına durum noktası (ana ekranda etiket, ayarlarda kart) */
+.peer-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; list-style: none; padding: 0; margin: 10px 0 0; }
+.peer-chips li { display: inline-flex; align-items: center; gap: 6px; max-width: 150px; padding: 3px 10px; border-radius: 999px; font-size: 12px; background: var(--surface-2); color: var(--muted); }
+.peer-chips li[data-connected="true"] { background: var(--ok-soft); color: var(--text); }
+.chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--idle); }
+[data-connected="true"] .dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.peer-card { margin-bottom: 10px; }
+.peer-name { display: flex; align-items: center; gap: 7px; }
+.peer-card[data-connected="true"] .peer-state { color: var(--ok); }
+#add-device { width: 100%; margin-bottom: 6px; }
+.transfer-what small.from { color: var(--muted); }
+
 /* Ayarlar açılınca arkadaki ekran geri çekilir */
 .screen { transition: transform 0.38s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.38s, filter 0.38s; }
 #app.sheet-open .screen { transform: scale(0.95) translateX(-6%); opacity: 0.5; filter: blur(1px); }

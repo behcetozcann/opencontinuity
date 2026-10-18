@@ -17,7 +17,7 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 
 ## Yapı
 
-- `crates/engine` → senkron motoru (eşleştirme + senkron döngüsü, olay/komut API'si); CLI ve masaüstü bunu kullanır
+- `crates/engine` → senkron motoru (eşleştirme + gruptaki eşlerle senkron döngüsü, olay/komut API'si); CLI ve masaüstü bunu kullanır
 - `apps/cli` → `oc` binary'si (teşhis aracı)
 - `apps/desktop` → Tauri 2 uygulaması (`src-tauri/` Rust, `ui/` derleme adımsız HTML/JS)
 - `crates/<ad>` → kütüphaneler; her yeni crate `Cargo.toml` `members` listesine eklenir (glob boş eşleşirse cargo hata verir)
@@ -47,11 +47,20 @@ Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3
 - Windows girişte başlatma: kayıt HKCU'ya, öneksiz/tırnaklı (`auto-launch` Dynamic kipi HKLM'ye `\\?\` önekli yazıyordu); her açılışta yenilenir, yalnız Ayarlar'dan kapatma `autostart-disabled` ile hatırlanır. Gerçek cihazda onaylı (F10).
 - 0.1.7 noterlikli; Gatekeeper kabul ediyor.
 
+Çoklu cihaz (2026-10-18 gece, `multi-device` dalı, yayınlanmadı → 0.1.8):
+- Protokol **v6** (`Peers` mesajı): yeni cihaz gruptaki herhangi biriyle kod onaylar, diğerleri bağlantıdaki `Peers` alışverişiyle öğrenir. Tam ağ, aktarma yok. 0.1.7 ile bağlanmaz.
+- `peers.json` (liste + `removed`); `peer.json` ilk yüklemede taşınır. Kaldırma yerel ve kalıcı (tanıtılsa da geri gelmez).
+- Core: pano sürümü `(lamport, gönderen)` — eski "yalnız yerel kopyayla karşılaştır" kuralı 3 cihazda ayrışıyordu (test eski kodda kırmızı). `pending_echo` 4'lük kuyruk.
+- Motor: `group.rs` (eş başına bağlantı/yeniden deneme/bekleyen kopya), `dial.rs` (çevirme ayrı görevde), `link.rs` ortak etiketli kanallar. Eşleştirme sırasında senkron durur.
+- Arayüz: grupta cihaz etiketleri, "Son aktarımlar"da kaynak adı, Ayarlar › Cihazlar (kart başına kaldır) + Cihaz ekle. Chrome önizlemesiyle doğrulandı (sahte Tauri: scratchpad `preview1/mock.js`).
+- Gerçek cihaz testi yok: `docs/test-plan.md` M1–M6.
+
 Sıradaki:
-1. Kopukken kopya gerçek cihaz testi: Mac kapak kapat/aç, bağlanmadan kopyala → Windows'ta yapıştır.
-2. Faz 2 devamı (plan §9) — kullanıcıya seçim soruldu, cevap bekliyor; önerim **çoklu cihaz** (Linux/mobil buna dayanır). Diğerleri: Linux, pano geçmişi/tercihler, isteğe bağlı "dosya paylaşımı" anahtarı (Gezgin'de yerel taşıma için yapılan her kopya da karşıya gidiyor).
-3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi). Faz 1 testleri tamam.
-4. Kökte izlenmeyen `AGENTS.md` var (bu oturum yazmadı; dokunulmadı).
+1. Linux (X11/Wayland pano + paket) — kullanıcı 2026-10-19'da gerçek cihazda test edecek.
+2. Toplu gerçek cihaz testi: M1–M6 + kopukken kopya (Mac kapak kapat/aç, bağlanmadan kopyala → Windows'ta yapıştır). Kullanıcı testleri biriktirmek istedi.
+3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
+4. Diğer Faz 2: pano geçmişi/tercihler, isteğe bağlı "dosya paylaşımı" anahtarı.
+5. Kökte izlenmeyen `AGENTS.md` (eski CLAUDE.md kopyası) ve `icons/` altındaki mobil simgeler: kullanıcı silme izni verdi ama araç izni reddetti; kullanıcı kendisi silebilir.
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap; `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
 

@@ -6,13 +6,17 @@ use oc_protocol::{ClipEvent, DeviceId, EventId, Payload};
 use sha2::{Digest, Sha256};
 
 const SEEN_EVENTS_CAPACITY: usize = 256;
+/// Birden çok eşten art arda gelen içeriklerin yankıları da tanınsın.
+const PENDING_ECHO_CAPACITY: usize = 4;
 
 pub struct SyncState {
     device_id: DeviceId,
     clock: u64,
-    last_local_lamport: u64,
-    /// Panoya yazdığımız son uzak içerik; izleyici onu yerel kopya sanmasın.
-    pending_echo: Option<[u8; 32]>,
+    /// Panodaki içeriğin sürümü: (Lamport, gönderen). Uzak olay ancak bundan
+    /// yeniyse uygulanır; böylece üç ve daha çok cihaz da aynı içerikte birleşir.
+    current: (u64, DeviceId),
+    /// Panoya yazdığımız son uzak içerikler; izleyici onları yerel kopya sanmasın.
+    pending_echo: VecDeque<[u8; 32]>,
     seen_order: VecDeque<EventId>,
     seen: HashSet<EventId>,
 }
@@ -22,8 +26,8 @@ impl SyncState {
         Self {
             device_id,
             clock: 0,
-            last_local_lamport: 0,
-            pending_echo: None,
+            current: (0, device_id),
+            pending_echo: VecDeque::new(),
             seen_order: VecDeque::new(),
             seen: HashSet::new(),
         }
@@ -42,11 +46,16 @@ impl SyncState {
     /// Yerel pano değişti. Karşıya gönderilecek olayı döner; kendi yazdığımız
     /// uzak içeriğin yankısıysa `None`.
     pub fn on_local(&mut self, payload: Payload) -> Option<ClipEvent> {
-        if self.pending_echo.take() == Some(content_hash(&payload)) {
+        let hash = content_hash(&payload);
+        let echo = self.pending_echo.iter().position(|pending| *pending == hash);
+        // Eşleşmeden öncekiler izleyicinin hiç görmediği, üzerine yazılmış içeriklerdir.
+        // Yankı değilse kullanıcı yeni bir şey kopyalamıştır; bekleyenlerin hepsi geçersiz.
+        self.pending_echo.drain(..echo.map_or(self.pending_echo.len(), |index| index + 1));
+        if echo.is_some() {
             return None;
         }
         self.clock += 1;
-        self.last_local_lamport = self.clock;
+        self.current = (self.clock, self.device_id);
         let event_id = event_id(&self.device_id, self.clock);
         self.remember(event_id);
         Some(ClipEvent { event_id, lamport: self.clock, payload })
@@ -58,12 +67,16 @@ impl SyncState {
             return false;
         }
         self.clock = self.clock.max(event.lamport);
-        let newer_than_local_copy = event.lamport > self.last_local_lamport
-            || (event.lamport == self.last_local_lamport && sender < &self.device_id);
-        if newer_than_local_copy {
-            self.pending_echo = Some(content_hash(&event.payload));
+        let (current_lamport, current_sender) = self.current;
+        let newer = event.lamport > current_lamport || (event.lamport == current_lamport && sender < &current_sender);
+        if newer {
+            self.current = (event.lamport, *sender);
+            self.pending_echo.push_back(content_hash(&event.payload));
+            if self.pending_echo.len() > PENDING_ECHO_CAPACITY {
+                self.pending_echo.pop_front();
+            }
         }
-        newer_than_local_copy
+        newer
     }
 
     /// Daha önce görülmemişse kaydeder ve `true` döner.

@@ -25,6 +25,8 @@ pub struct Transfer {
     /// Dosyada kopyalanan üst düzey öğe sayısı.
     items: usize,
     at_ms: u64,
+    /// Gelenlerde gönderen cihaz; birden çok eş varken arayüz "Windows'tan" der.
+    from: Option<String>,
     /// Gelen dosyaların klasörü; arayüz "Göster" der. Yol arayüzden geri alınmaz.
     #[serde(skip)]
     saved_to: Option<std::path::PathBuf>,
@@ -34,7 +36,12 @@ pub struct Transfer {
 impl Transfer {
     fn now(direction: &'static str, content: ContentKind, bytes: u64, items: usize) -> Self {
         let at_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_millis() as u64).unwrap_or(0);
-        Self { direction, content, bytes, items, at_ms, saved_to: None, can_reveal: false }
+        Self { direction, content, bytes, items, at_ms, from: None, saved_to: None, can_reveal: false }
+    }
+
+    fn from(mut self, peer: String) -> Self {
+        self.from = Some(peer);
+        self
     }
 
     fn saved_to(mut self, dir: Option<std::path::PathBuf>) -> Self {
@@ -56,6 +63,9 @@ pub struct View {
     /// Süren görsel aktarımı; bitince, atlanınca ya da bağlantı kopunca temizlenir.
     in_flight: Option<Transfer>,
     pairing_error: Option<String>,
+    /// Her başarılı eşleşmede artar; arayüz "Hazır" adımını buna göre gösterir
+    /// (eş zaten varken eş listesine bakmak eşleşmenin bittiğini söylemez).
+    paired_count: u64,
     /// Motor durduysa (ör. port kullanımda) nedeni.
     engine_error: Option<String>,
     update: updater::UpdateStatus,
@@ -123,7 +133,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let config = EngineConfig::system()?;
-            let unpaired = PeerStore::new(&config.config_dir).load()?.is_none();
+            let unpaired = PeerStore::new(&config.config_dir).load_all()?.is_empty();
             diagnostics::open(&config.config_dir);
             autostart::sync(app.handle(), &config.config_dir);
             let (engine, handle, events) = Engine::new(config, ClipboardSource::System);
@@ -195,22 +205,25 @@ fn apply_event(app: &AppHandle, event: Event) {
         Event::Sending { content, bytes, items } => {
             update_view(app, |view| view.in_flight = Some(Transfer::now("sent", content, bytes, items)))
         }
-        Event::Receiving { content, bytes, items } => {
-            update_view(app, |view| view.in_flight = Some(Transfer::now("received", content, bytes, items)))
+        Event::Receiving { content, bytes, items, from } => {
+            update_view(app, |view| view.in_flight = Some(Transfer::now("received", content, bytes, items).from(from)))
         }
         Event::Sent { content, bytes, items, .. } => {
             update_view(app, |view| view.record_transfer(Transfer::now("sent", content, bytes, items)))
         }
-        Event::Received { content, bytes, items, saved_to, .. } => {
-            update_view(app, |view| view.record_transfer(Transfer::now("received", content, bytes, items).saved_to(saved_to)))
-        }
+        Event::Received { content, bytes, items, from, saved_to, .. } => update_view(app, |view| {
+            view.record_transfer(Transfer::now("received", content, bytes, items).from(from).saved_to(saved_to))
+        }),
         Event::TooLarge { content, bytes, .. } => {
             update_view(app, |view| view.record_transfer(Transfer::now("too_large", content, bytes, 1)))
         }
         Event::Skipped { .. } | Event::Disconnected { .. } => update_view(app, |view| view.in_flight = None),
         Event::PairingFailed { reason } => update_view(app, |view| view.pairing_error = Some(reason)),
-        Event::Paired { .. } => update_view(app, |view| view.pairing_error = None),
-        Event::Diagnostic { .. } => {}
+        Event::Paired { .. } => update_view(app, |view| {
+            view.pairing_error = None;
+            view.paired_count += 1;
+        }),
+        Event::PeerAdded { .. } | Event::Diagnostic { .. } => {}
     }
 }
 

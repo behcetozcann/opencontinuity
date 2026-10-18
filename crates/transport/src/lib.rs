@@ -51,6 +51,7 @@ pub async fn connect(
     trust: Trust,
     listen_port: u16,
 ) -> anyhow::Result<Session> {
+    let pairing = trust == Trust::Pairing;
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])?
@@ -64,10 +65,11 @@ pub async fn connect(
     let (fingerprint, exporter) = session_secrets(tls.get_ref().1, |out| {
         tls.get_ref().1.export_keying_material(out, EXPORTER_LABEL, None).map(|_| ())
     })?;
-    hello(TlsStream::from(tls), identity, fingerprint, exporter, Local { trust, listen_port }).await
+    hello(TlsStream::from(tls), identity, fingerprint, exporter, Local { pairing, listen_port }).await
 }
 
 pub async fn accept(tcp: TcpStream, identity: &Identity, trust: Trust, listen_port: u16) -> anyhow::Result<Session> {
+    let pairing = trust == Trust::Pairing;
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = ServerConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])?
@@ -78,7 +80,7 @@ pub async fn accept(tcp: TcpStream, identity: &Identity, trust: Trust, listen_po
     let (fingerprint, exporter) = session_secrets(tls.get_ref().1, |out| {
         tls.get_ref().1.export_keying_material(out, EXPORTER_LABEL, None).map(|_| ())
     })?;
-    hello(TlsStream::from(tls), identity, fingerprint, exporter, Local { trust, listen_port }).await
+    hello(TlsStream::from(tls), identity, fingerprint, exporter, Local { pairing, listen_port }).await
 }
 
 fn session_secrets(
@@ -92,7 +94,7 @@ fn session_secrets(
 }
 
 struct Local {
-    trust: Trust,
+    pairing: bool,
     listen_port: u16,
 }
 
@@ -103,7 +105,7 @@ async fn hello(
     exporter: [u8; 32],
     local: Local,
 ) -> anyhow::Result<Session> {
-    let own_pairing = local.trust == Trust::Pairing;
+    let own_pairing = local.pairing;
     let own = Message::Hello {
         version: VERSION,
         device_id: identity.device_id(),

@@ -2,7 +2,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{Node, code_of, fast_timing, free_port, pair, paired_and_connected, text};
+use common::{Node, code_of, fast_timing, free_port, pair, paired_and_connected, text, unpair};
 use oc_engine::{Clip, Command, ContentKind, Event, PairingStage, Timing};
 use oc_pairing::{Identity, Peer, PeerStore};
 use oc_protocol::Message;
@@ -108,10 +108,10 @@ fn stop(node: Node) -> (tempfile::TempDir, u16) {
 #[tokio::test]
 async fn unpaired_device_rejects_old_peer_and_can_pair_again() {
     let (mut mac, mut windows) = paired_and_connected().await;
-    mac.handle.send(Command::Unpair);
-    mac.wait_state(|snapshot| snapshot.peer.is_none()).await;
+    unpair(&mac, &windows);
+    mac.wait_state(|snapshot| snapshot.peers.is_empty()).await;
     windows.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
-    assert!(PeerStore::new(mac.dir.path()).load().unwrap().is_none());
+    assert!(PeerStore::new(mac.dir.path()).load_all().unwrap().is_empty());
 
     // Mac eşleştirme beklerken eski eş (hâlâ senkron modunda) bağlanamaz.
     mac.handle.send(Command::StartPairing { address: None });
@@ -119,13 +119,13 @@ async fn unpaired_device_rejects_old_peer_and_can_pair_again() {
     let old_peer = Identity::load_or_create(windows.dir.path(), "windows").unwrap();
     let mac_identity = Identity::load_or_create(mac.dir.path(), "mac").unwrap();
     let attempt =
-        oc_transport::connect(("127.0.0.1", mac.port), &old_peer, Trust::Pinned(mac_identity.fingerprint()), windows.port).await;
+        oc_transport::connect(("127.0.0.1", mac.port), &old_peer, Trust::Pinned(vec![mac_identity.fingerprint()]), windows.port).await;
     assert!(attempt.is_err(), "senkron modundaki eski eş eşleştirme dinleyicisine bağlanmamalı");
     mac.handle.send(Command::CancelPairing);
     mac.wait_state(|snapshot| snapshot.pairing.is_none()).await;
 
-    windows.handle.send(Command::Unpair);
-    windows.wait_state(|snapshot| snapshot.peer.is_none()).await;
+    unpair(&windows, &mac);
+    windows.wait_state(|snapshot| snapshot.peers.is_empty()).await;
     pair(&mut mac, &mut windows).await;
     mac.wait_connected().await;
     mac.copy.send(text("yeniden")).await.unwrap();
@@ -144,8 +144,8 @@ async fn rejecting_code_saves_nothing() {
     mac.handle.send(Command::ConfirmCode(false));
     mac.wait_for(|event| matches!(event, Event::PairingFailed { .. })).await;
     windows.wait_for(|event| matches!(event, Event::PairingFailed { .. })).await;
-    assert!(PeerStore::new(mac.dir.path()).load().unwrap().is_none());
-    assert!(PeerStore::new(windows.dir.path()).load().unwrap().is_none());
+    assert!(PeerStore::new(mac.dir.path()).load_all().unwrap().is_empty());
+    assert!(PeerStore::new(windows.dir.path()).load_all().unwrap().is_empty());
 }
 
 /// Eş saatini gönderip susarsa heartbeat zaman aşımıyla bağlantı kapatılır.
@@ -158,7 +158,7 @@ async fn silent_peer_is_dropped_by_heartbeat() {
     let silent_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let silent_port = silent_listener.local_addr().unwrap().port();
     PeerStore::new(mac_dir.path())
-        .save(&Peer {
+        .upsert(&Peer {
             name: "sessiz".into(),
             fingerprint: silent.fingerprint(),
             last_address: Some(format!("127.0.0.1:{silent_port}")),
@@ -166,8 +166,8 @@ async fn silent_peer_is_dropped_by_heartbeat() {
         .unwrap();
     let mut mac = Node::start_in("mac", mac_dir);
     // Eş bilgisi yayınlandığında motor portu açmış olur.
-    mac.wait_state(|snapshot| snapshot.peer.is_some()).await;
-    let trust = Trust::Pinned(mac_identity.fingerprint());
+    mac.wait_state(|snapshot| !snapshot.peers.is_empty()).await;
+    let trust = Trust::Pinned(vec![mac_identity.fingerprint()]);
 
     let mut session = if mac_identity.fingerprint() < silent.fingerprint() {
         let (tcp, _) = silent_listener.accept().await.unwrap();
@@ -178,6 +178,6 @@ async fn silent_peer_is_dropped_by_heartbeat() {
     session.send(&Message::Clock { lamport: 0 }).await.unwrap();
     mac.wait_connected().await;
     let event = mac.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
-    assert!(matches!(event, Event::Disconnected { reason } if reason.contains("yanıt vermedi")));
+    assert!(matches!(event, Event::Disconnected { reason, .. } if reason.contains("yanıt vermedi")));
     drop(session);
 }

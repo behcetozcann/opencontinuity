@@ -41,9 +41,13 @@ pub fn write(message: &str) {
 pub fn record(event: &Event) {
     let line = match event {
         Event::State(snapshot) => format!(
-            "Durum: eş={} bağlı={} duraklatıldı={} eşleştirme={}",
-            snapshot.peer.as_ref().map_or("yok", |peer| peer.name.as_str()),
-            snapshot.connected_ip.as_deref().unwrap_or("hayır"),
+            "Durum: eşler=[{}] duraklatıldı={} eşleştirme={}",
+            snapshot
+                .peers
+                .iter()
+                .map(|peer| format!("{} {}", peer.name, if peer.connected { "bağlı" } else { "bekleniyor" }))
+                .collect::<Vec<_>>()
+                .join(", "),
             snapshot.paused,
             match &snapshot.pairing {
                 None => "yok",
@@ -53,13 +57,16 @@ pub fn record(event: &Event) {
             }
         ),
         Event::Sending { content, bytes, items } => format!("Gönderiliyor: {content:?}, {items} öğe, {bytes} bayt"),
-        Event::Receiving { content, bytes, items } => format!("Alınıyor: {content:?}, {items} öğe, {bytes} bayt"),
+        Event::Receiving { content, bytes, items, from } => format!("Alınıyor ({from}): {content:?}, {items} öğe, {bytes} bayt"),
         Event::TooLarge { content, bytes, limit } => format!("Çok büyük, gönderilmedi: {content:?}, {bytes} bayt (sınır {limit})"),
         Event::Sent { content, bytes, items, lamport } => format!("Gönderildi: {content:?}, {items} öğe, {bytes} bayt (lamport {lamport})"),
-        Event::Received { content, bytes, items, lamport, .. } => format!("Alındı: {content:?}, {items} öğe, {bytes} bayt (lamport {lamport})"),
+        Event::Received { content, bytes, items, lamport, from, .. } => {
+            format!("Alındı ({from}): {content:?}, {items} öğe, {bytes} bayt (lamport {lamport})")
+        }
         Event::Skipped { reason } => reason.clone(),
-        Event::Disconnected { reason } => format!("Bağlantı koptu: {reason}"),
+        Event::Disconnected { peer, reason } => format!("Bağlantı koptu ({peer}): {reason}"),
         Event::Paired { peer } => format!("Eşleşti: {peer}"),
+        Event::PeerAdded { peer, via } => format!("Gruba eklendi: {peer} ({via} tanıttı)"),
         Event::PairingFailed { reason } => format!("Eşleştirme başarısız: {reason}"),
         Event::Diagnostic { message } => message.clone(),
     };

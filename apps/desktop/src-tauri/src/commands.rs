@@ -33,8 +33,8 @@ pub fn set_paused(state: State<'_, AppState>, paused: bool) {
 }
 
 #[tauri::command]
-pub fn unpair(state: State<'_, AppState>) {
-    state.engine().send(Command::Unpair);
+pub fn unpair(state: State<'_, AppState>, fingerprint_prefix: String) {
+    state.engine().send(Command::Unpair { fingerprint_prefix });
 }
 
 #[tauri::command]

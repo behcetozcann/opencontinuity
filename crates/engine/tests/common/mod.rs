@@ -95,8 +95,13 @@ impl Node {
         }
     }
 
+    /// En az `count` eşe bağlı olana kadar bekler.
+    pub async fn wait_connected_to(&mut self, count: usize) {
+        self.wait_state(|snapshot| snapshot.connected_count() >= count).await;
+    }
+
     pub async fn wait_connected(&mut self) {
-        self.wait_state(|snapshot| snapshot.connected_ip.is_some()).await;
+        self.wait_state(|snapshot| snapshot.connected_count() > 0).await;
     }
 
     /// Panoya yazılan sonraki içerik.
@@ -136,6 +141,13 @@ pub async fn pair(waiting: &mut Node, joining: &mut Node) {
     joining.handle.send(Command::ConfirmCode(true));
     waiting.wait_for(|event| matches!(event, Event::Paired { .. })).await;
     joining.wait_for(|event| matches!(event, Event::Paired { .. })).await;
+}
+
+/// Bu düğümün gruptan `other`'ı kaldırmasını sağlar.
+pub fn unpair(node: &Node, other: &Node) {
+    let identity = oc_pairing::Identity::load_or_create(other.dir.path(), "x").unwrap();
+    let fingerprint_prefix = hex::encode(identity.fingerprint())[..16].to_owned();
+    node.handle.send(Command::Unpair { fingerprint_prefix });
 }
 
 pub async fn paired_and_connected() -> (Node, Node) {

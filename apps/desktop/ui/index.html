@@ -24,8 +24,8 @@
 
       <div class="step" id="ob-searching">
         <div class="radar"><span></span><span></span><span></span><i data-icon="self"></i></div>
-        <h1>Diğer bilgisayar aranıyor</h1>
-        <p class="lead">Diğer bilgisayarda OpenContinuity'yi açıp <b>Eşleştirmeye başla</b>'ya basın.</p>
+        <h1 id="ob-searching-title">Diğer bilgisayar aranıyor</h1>
+        <p class="lead">Diğer bilgisayarda OpenContinuity'yi açıp <b>Eşleştirmeye başla</b>'ya basın. O bilgisayar zaten eşleşmişse <b>Ayarlar › Cihaz ekle</b>'yi kullanın.</p>
         <div class="self-card">
           <span class="muted">Bu bilgisayar</span>
           <b id="ob-self-name"></b>
@@ -66,7 +66,7 @@
       <div class="step" id="ob-done">
         <div class="success"><i data-icon="check"></i></div>
         <h1>Hazır</h1>
-        <p class="lead">Artık bir bilgisayarda kopyaladığınız metni diğerinde yapıştırabilirsiniz.</p>
+        <p class="lead" id="ob-done-lead"></p>
       </div>
     </section>
 
@@ -76,6 +76,7 @@
       <div class="status">
         <h1 id="home-title"></h1>
         <p class="lead" id="home-detail"></p>
+        <ul class="peer-chips" id="home-peers" hidden></ul>
       </div>
       <div class="notice-slot" id="home-notice"></div>
       <label class="card toggle-card">
@@ -121,23 +122,11 @@
           </div>
         </div>
 
-        <div class="group" id="settings-peer">
-          <div class="group-title">Eşleşmiş cihaz</div>
-          <div class="card">
-            <dl class="facts">
-              <dt>Ad</dt><dd id="peer-name"></dd>
-              <dt>Parmak izi</dt><dd class="mono" id="peer-fingerprint"></dd>
-              <dt>Son adres</dt><dd class="mono" id="peer-address"></dd>
-            </dl>
-            <div id="unpair-ask"><button class="btn danger-outline" id="unpair">Eşleşmeyi kaldır</button></div>
-            <div id="unpair-confirm" hidden>
-              <p class="small">Pano paylaşımı durur. Diğer bilgisayarda da eşleşmeyi kaldırmanız gerekir.</p>
-              <div class="row">
-                <button class="btn secondary" id="unpair-no">Vazgeç</button>
-                <button class="btn danger" id="unpair-yes">Kaldır</button>
-              </div>
-            </div>
-          </div>
+        <div class="group" id="settings-peers">
+          <div class="group-title">Cihazlar</div>
+          <div id="peer-cards"></div>
+          <button class="btn secondary" id="add-device">Cihaz ekle</button>
+          <p class="small muted">Yeni cihazı gruptaki herhangi bir bilgisayarla eşleştirmeniz yeter; diğerleri onu kendiliğinden tanır.</p>
         </div>
 
         <div class="group">
@@ -165,7 +154,7 @@
             <p><b>OpenContinuity</b> <span class="muted" id="about-version"></span></p>
             <p class="small muted">Bu cihaz: <span id="about-device"></span> · <span class="mono" id="about-fingerprint"></span></p>
             <ul class="small privacy">
-              <li>Veriler yalnız yerel ağda, şifreli olarak iki bilgisayar arasında gider.</li>
+              <li>Veriler yalnız yerel ağda, şifreli olarak eşleşmiş bilgisayarlar arasında gider.</li>
               <li>Parola yöneticilerinin gizli işaretli kopyaları gönderilmez.</li>
               <li>Karşı bilgisayar kapalıyken kopyalananlar biriktirilmez.</li>
               <li>Dosyalar ve klasörler de kopyalanınca karşıya gider (500 MB'a kadar).</li>

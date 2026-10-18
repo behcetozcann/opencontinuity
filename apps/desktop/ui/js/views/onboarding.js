@@ -82,6 +82,12 @@ export function renderOnboarding({ view, ui }) {
     );
   }
   $("ob-waiting-peer").textContent = pairing.peer || "diğer bilgisayar";
+  // Gruba cihaz eklerken "Vazgeç" ana ekrana döner; yazılar yeni cihazı anlatır.
+  const adding = snapshot.peers.length > 0;
+  $("ob-searching-title").textContent = adding ? "Yeni cihaz aranıyor" : "Diğer bilgisayar aranıyor";
+  $("ob-done-lead").textContent = adding
+    ? "Yeni cihaz gruba katıldı; diğer cihazlar onu kendiliğinden tanır."
+    : "Artık bir bilgisayarda kopyaladığınız metni diğerinde yapıştırabilirsiniz.";
   renderNotice($("ob-notice"), step === "welcome" ? pickNotice(view, { includePairing: true }) : null);
   $("ob-start").textContent = view.pairing_error ? "Tekrar dene" : "Eşleştirmeye başla";
   $("ob-start").disabled ||= Boolean(view.engine_error);

@@ -3,12 +3,16 @@
 //! [`Event`] kanalından okur ve [`Handle`] ile komut gönderir.
 //!
 //! Durumlar: eş yoksa boşta (port kapalı) → `StartPairing` ile eşleştirme →
-//! eş kaydedilince senkron döngüsü → `Unpair` ile tekrar boşta.
+//! eş kaydedilince senkron döngüsü (gruptaki bütün eşlerle) → son eş
+//! kaldırılınca tekrar boşta. Senkrondayken `StartPairing` gruba yeni cihaz
+//! ekler; eşleştirme süresince senkron durur.
 
 mod clipboard_thread;
 pub mod config;
+mod dial;
 mod events;
 mod files;
+mod group;
 mod link;
 mod pairing;
 mod sync_loop;
@@ -108,7 +112,8 @@ pub enum Command {
     CancelPairing,
     Pause,
     Resume,
-    Unpair,
+    /// Gruptan bir cihazı kaldırır (`PeerSummary::fingerprint_prefix`).
+    Unpair { fingerprint_prefix: String },
     Shutdown,
 }
 
@@ -160,14 +165,16 @@ impl Engine {
             snapshot.device_name = device_name;
             snapshot.fingerprint_prefix = fingerprint_prefix;
         });
+        let mut flow = Flow::Continue;
         loop {
-            let flow = match context.store.load()? {
-                Some(peer) => sync_loop::run(&mut context, peer).await?,
-                None => idle(&mut context).await?,
+            flow = match flow {
+                Flow::Shutdown => return Ok(()),
+                Flow::Pair { address } => pairing::run(&mut context, address).await?,
+                Flow::Continue => {
+                    let peers = context.store.load_all()?;
+                    if peers.is_empty() { idle(&mut context).await? } else { sync_loop::run(&mut context, peers).await? }
+                }
             };
-            if flow == Flow::Shutdown {
-                return Ok(());
-            }
         }
     }
 }
@@ -185,21 +192,22 @@ pub(crate) struct Context {
 pub(crate) enum Flow {
     /// Eş kaydı değişmiş olabilir; durum yeniden belirlenir.
     Continue,
+    /// Port bırakıldı; eşleştirme başlar.
+    Pair { address: Option<String> },
     Shutdown,
 }
 
 /// Eş yokken: port kapalı, eşleştirme komutu beklenir.
 async fn idle(context: &mut Context) -> anyhow::Result<Flow> {
     context.events.update(|snapshot| {
-        snapshot.peer = None;
-        snapshot.connected_ip = None;
+        snapshot.peers.clear();
         snapshot.pairing = None;
     });
     loop {
         tokio::select! {
             command = context.commands.recv() => match command {
                 None | Some(Command::Shutdown) => return Ok(Flow::Shutdown),
-                Some(Command::StartPairing { address }) => return pairing::run(context, address).await,
+                Some(Command::StartPairing { address }) => return Ok(Flow::Pair { address }),
                 Some(Command::Pause) => context.events.update(|snapshot| snapshot.paused = true),
                 Some(Command::Resume) => context.events.update(|snapshot| snapshot.paused = false),
                 Some(_) => {}

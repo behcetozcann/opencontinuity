@@ -167,3 +167,74 @@ fn image_echo_is_suppressed_and_text_with_same_bytes_is_not() {
     assert!(windows.on_remote(&MAC, &event));
     assert!(windows.on_local(Payload::Png("aynı".as_bytes().to_vec())).is_some(), "farklı tür yankı sayılmamalı");
 }
+
+const LINUX: DeviceId = [3; 16];
+
+/// Üç cihazlı tam ağ: her kopya diğer ikisine ayrı kuyruklarla, farklı sırada
+/// ulaşır. Eski kural (yalnız yerel kopyayla karşılaştırma) burada cihazları
+/// farklı içerikte bırakıyordu.
+#[test]
+fn three_devices_random_events_no_loop_and_converge() {
+    let ids = [MAC, WINDOWS, LINUX];
+    let mut nodes = ids.map(Node::new);
+    // queues[to][from]
+    let mut queues: [[VecDeque<ClipEvent>; 3]; 3] = Default::default();
+    let mut random = Lcg(0xc0ffee);
+    let mut local_copies = 0;
+    let mut messages_sent = 0;
+
+    for step in 0..3_000 {
+        let index = (random.next() % 3) as usize;
+        if random.next().is_multiple_of(3) {
+            local_copies += 1;
+            nodes[index].clipboard = Payload::Text(format!("kopya {step}"));
+            if let Some(event) = nodes[index].poll_clipboard() {
+                broadcast(&mut queues, index, event, &mut messages_sent);
+            }
+        } else {
+            let from = (random.next() % 3) as usize;
+            deliver_from(&mut nodes, &mut queues, &ids, index, from, &mut messages_sent);
+        }
+    }
+    let mut drain_rounds = 0;
+    while queues.iter().flatten().any(|queue| !queue.is_empty()) {
+        drain_rounds += 1;
+        assert!(drain_rounds <= 5_000, "kuyruk boşalmıyor: yankı döngüsü");
+        for to in 0..3 {
+            for from in 0..3 {
+                deliver_from(&mut nodes, &mut queues, &ids, to, from, &mut messages_sent);
+            }
+        }
+    }
+
+    assert!(messages_sent <= local_copies * 2, "yankı döngüsü: {messages_sent} > {}", local_copies * 2);
+    assert_eq!(nodes[0].clipboard, nodes[1].clipboard, "Mac ve Windows aynı içerikte olmalı");
+    assert_eq!(nodes[1].clipboard, nodes[2].clipboard, "Windows ve Linux aynı içerikte olmalı");
+}
+
+fn broadcast(queues: &mut [[VecDeque<ClipEvent>; 3]; 3], from: usize, event: ClipEvent, sent: &mut usize) {
+    for (to, inbox) in queues.iter_mut().enumerate() {
+        if to != from {
+            *sent += 1;
+            inbox[from].push_back(event.clone());
+        }
+    }
+}
+
+fn deliver_from(
+    nodes: &mut [Node; 3],
+    queues: &mut [[VecDeque<ClipEvent>; 3]; 3],
+    ids: &[DeviceId; 3],
+    to: usize,
+    from: usize,
+    sent: &mut usize,
+) {
+    let Some(event) = queues[to][from].pop_front() else { return };
+    let node = &mut nodes[to];
+    if node.state.on_remote(&ids[from], &event) {
+        node.clipboard = event.payload;
+        if let Some(echo) = node.poll_clipboard() {
+            broadcast(queues, to, echo, sent);
+        }
+    }
+}

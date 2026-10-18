@@ -13,6 +13,8 @@ use tokio::io::{AsyncReadExt, WriteHalf};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 
+use crate::link::LinkId;
+
 pub enum Job {
     Control { message: Message, ack: Option<oneshot::Sender<anyhow::Result<()>>> },
     Clip { event: ClipEvent, sources: Vec<PathBuf> },
@@ -57,22 +59,19 @@ enum Frames {
 }
 
 pub async fn write_loop(
+    link_id: LinkId,
     mut writer: WriteHalf<Stream>,
     mut jobs: mpsc::UnboundedReceiver<Job>,
-    completions: mpsc::UnboundedSender<Completion>,
+    completions: mpsc::UnboundedSender<(LinkId, Completion)>,
     send_timeout: Duration,
 ) {
     let write = async |writer: &mut WriteHalf<Stream>, message: &Message| {
         timeout(send_timeout, write_message(writer, message)).await.context("gönderim zaman aşımı")?
     };
     let finish = |report: Report, outcome: Outcome| {
-        let _ = completions.send(Completion {
-            content: report.content,
-            bytes: report.bytes,
-            items: report.items,
-            lamport: report.lamport,
-            outcome,
-        });
+        let completion =
+            Completion { content: report.content, bytes: report.bytes, items: report.items, lamport: report.lamport, outcome };
+        let _ = completions.send((link_id, completion));
     };
     let mut bulk: Option<Bulk> = None;
     loop {

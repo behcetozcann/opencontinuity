@@ -56,7 +56,7 @@ async fn each_session_has_different_exporter() {
 async fn pinned_peers_connect_and_exchange_text() {
     let (mac, windows) = (identity("Mac"), identity("Windows"));
     let (server, client) =
-        pair_up(&mac, &windows, Trust::Pinned(windows.fingerprint()), Trust::Pinned(mac.fingerprint())).await;
+        pair_up(&mac, &windows, Trust::Pinned(vec![windows.fingerprint()]), Trust::Pinned(vec![mac.fingerprint()])).await;
     let (mut server, mut client) = (server.unwrap(), client.unwrap());
     assert_eq!(server.peer_listen_port, CLIENT_PORT);
     assert_eq!(client.peer_listen_port, SERVER_PORT);
@@ -71,7 +71,7 @@ async fn pinned_peers_connect_and_exchange_text() {
 async fn unknown_client_is_rejected_by_pinned_server() {
     let (mac, windows, stranger) = (identity("Mac"), identity("Windows"), identity("Yabancı"));
     let (server, client) =
-        pair_up(&mac, &stranger, Trust::Pinned(windows.fingerprint()), Trust::Pinned(mac.fingerprint())).await;
+        pair_up(&mac, &stranger, Trust::Pinned(vec![windows.fingerprint()]), Trust::Pinned(vec![mac.fingerprint()])).await;
     assert!(server.is_err(), "sunucu yabancıyı kabul etmemeli");
     assert!(client.is_err());
 }
@@ -79,7 +79,7 @@ async fn unknown_client_is_rejected_by_pinned_server() {
 #[tokio::test]
 async fn unknown_server_is_rejected_by_pinned_client() {
     let (mac, windows, stranger) = (identity("Mac"), identity("Windows"), identity("Yabancı"));
-    let (server, client) = pair_up(&stranger, &windows, Trust::Pairing, Trust::Pinned(mac.fingerprint())).await;
+    let (server, client) = pair_up(&stranger, &windows, Trust::Pairing, Trust::Pinned(vec![mac.fingerprint()])).await;
     assert!(client.is_err(), "istemci sahte sunucuya bağlanmamalı");
     assert!(server.is_err());
 }
@@ -88,7 +88,17 @@ async fn unknown_server_is_rejected_by_pinned_client() {
 #[tokio::test]
 async fn pairing_and_sync_modes_do_not_mix() {
     let (mac, windows) = (identity("Mac"), identity("Windows"));
-    let (server, client) = pair_up(&mac, &windows, Trust::Pairing, Trust::Pinned(mac.fingerprint())).await;
+    let (server, client) = pair_up(&mac, &windows, Trust::Pairing, Trust::Pinned(vec![mac.fingerprint()])).await;
     assert!(server.is_err(), "eşleştirme bekleyen taraf senkron modundaki eşi kabul etmemeli");
     assert!(client.is_err());
+}
+
+/// Kabul eden taraf gruptaki her eşi tanır; listede olmayan yine reddedilir.
+#[tokio::test]
+async fn pinned_server_accepts_any_group_member() {
+    let (mac, windows, linux) = (identity("Mac"), identity("Windows"), identity("Linux"));
+    let group = Trust::Pinned(vec![windows.fingerprint(), linux.fingerprint()]);
+    let (server, client) = pair_up(&mac, &linux, group, Trust::Pinned(vec![mac.fingerprint()])).await;
+    assert_eq!(server.unwrap().peer_name, "Linux");
+    assert!(client.is_ok());
 }

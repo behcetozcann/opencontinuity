@@ -9,18 +9,18 @@ pub fn show_identity() -> anyhow::Result<()> {
     let identity = Identity::load_or_create(&config.config_dir, &config.device_name)?;
     println!("Cihaz adı:  {}", identity.name);
     println!("Parmak izi: {}", hex::encode(identity.fingerprint()));
-    match PeerStore::new(&config.config_dir).load()? {
-        Some(peer) => println!("Eş:         {} ({})", peer.name, &hex::encode(peer.fingerprint)[..16]),
-        None => println!("Eş:         yok"),
+    let peers = PeerStore::new(&config.config_dir).load_all()?;
+    if peers.is_empty() {
+        println!("Grup:       eş yok");
+    }
+    for peer in peers {
+        println!("Eş:         {} ({})", peer.name, &hex::encode(peer.fingerprint)[..16]);
     }
     Ok(())
 }
 
 pub async fn pair(address: Option<String>) -> anyhow::Result<()> {
     let config = EngineConfig::system()?;
-    if let Some(peer) = PeerStore::new(&config.config_dir).load()? {
-        bail!("zaten '{}' ile eşleşmiş; önce `oc unpair` çalıştır", peer.name);
-    }
     let (engine, handle, mut events) = Engine::new(config, ClipboardSource::System);
     let task = tokio::spawn(engine.run());
     handle.send(Command::StartPairing { address });
@@ -57,12 +57,17 @@ pub async fn pair(address: Option<String>) -> anyhow::Result<()> {
     task.await?
 }
 
-pub fn unpair() -> anyhow::Result<()> {
-    if PeerStore::new(&EngineConfig::system()?.config_dir).remove()? {
-        println!("Eşleşme kaldırıldı. Karşı cihazda da eşleşmeyi kaldırın.");
-    } else {
-        println!("Kayıtlı eş yok.");
-    }
+/// `prefix`: `oc id`'nin gösterdiği parmak izi öneki; tek eşe uymalı.
+pub fn unpair(prefix: &str) -> anyhow::Result<()> {
+    let store = PeerStore::new(&EngineConfig::system()?.config_dir);
+    let prefix = prefix.trim().to_lowercase();
+    let matches: Vec<_> =
+        store.load_all()?.into_iter().filter(|peer| !prefix.is_empty() && hex::encode(peer.fingerprint).starts_with(&prefix)).collect();
+    let [peer] = matches.as_slice() else {
+        bail!("'{prefix}' tek bir eşe uymuyor ({} eş); `oc id` ile önekleri gör", matches.len());
+    };
+    store.remove(&peer.fingerprint)?;
+    println!("'{}' gruptan kaldırıldı. Diğer cihazlarda da kaldırın; yoksa onlarla senkron sürer.", peer.name);
     Ok(())
 }
 

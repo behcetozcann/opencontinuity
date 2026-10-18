@@ -11,10 +11,11 @@ use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 use rustls::{CertificateError, DigitallySignedStruct, DistinguishedName, Error, SignatureScheme};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Trust {
-    /// Yalnız bu parmak izine sahip eş kabul edilir.
-    Pinned(Fingerprint),
+    /// Yalnız bu parmak izlerinden birine sahip eş kabul edilir (bağlanan
+    /// taraf tek eşi, kabul eden taraf gruptaki bütün eşleri verir).
+    Pinned(Vec<Fingerprint>),
     /// Eşleştirme: her sertifika kabul edilir, güven sonradan SAS ile kurulur.
     Pairing,
 }
@@ -31,9 +32,9 @@ impl PeerVerifier {
     }
 
     fn check(&self, certificate: &CertificateDer<'_>) -> Result<(), Error> {
-        match self.trust {
+        match &self.trust {
             Trust::Pairing => Ok(()),
-            Trust::Pinned(expected) if fingerprint_of(certificate) == expected => Ok(()),
+            Trust::Pinned(known) if known.contains(&fingerprint_of(certificate)) => Ok(()),
             Trust::Pinned(_) => Err(Error::InvalidCertificate(CertificateError::ApplicationVerificationFailure)),
         }
     }

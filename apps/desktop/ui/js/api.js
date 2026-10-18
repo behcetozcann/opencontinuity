@@ -10,7 +10,7 @@ export const isMac = navigator.userAgent.includes("Mac");
 export const store = {
   view: null,
   version: "",
-  ui: { settingsOpen: false, celebrating: false, awaitingPeer: false },
+  ui: { settingsOpen: false, celebrating: false, awaitingPeer: false, pairedSeen: 0 },
 };
 
 const subscribers = new Set();

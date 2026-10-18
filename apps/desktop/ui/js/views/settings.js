@@ -1,5 +1,5 @@
-// Ayarlar paneli: Genel, Eşleşmiş cihaz, Güncellemeler, Sorun giderme, Hakkında.
-import { invoke, run, setUi, store } from "../api.js";
+// Ayarlar paneli: Genel, Gelen dosyalar, Cihazlar, Güncellemeler, Sorun giderme, Hakkında.
+import { invoke, notify, run, setUi, store } from "../api.js";
 import { renderUpdate } from "../components/update.js";
 
 const $ = (id) => document.getElementById(id);
@@ -34,9 +34,64 @@ async function loadLog() {
   }
 }
 
-function resetUnpair() {
-  $("unpair-ask").hidden = false;
-  $("unpair-confirm").hidden = true;
+// Kaldırma onayı açık olan cihazın parmak izi öneki.
+let confirmingRemoval = null;
+
+function peerCard(peer, groupSize) {
+  const card = document.createElement("div");
+  card.className = "card peer-card";
+  card.innerHTML = `
+    <dl class="facts">
+      <dt>Ad</dt><dd class="peer-name"><span class="dot"></span><b></b></dd>
+      <dt>Durum</dt><dd class="peer-state"></dd>
+      <dt>Parmak izi</dt><dd class="mono peer-fingerprint"></dd>
+      <dt>Adres</dt><dd class="mono peer-address"></dd>
+    </dl>
+    <div class="unpair-ask"><button class="btn danger-outline">Bu cihazı kaldır</button></div>
+    <div class="unpair-confirm" hidden>
+      <p class="small"></p>
+      <div class="row">
+        <button class="btn secondary unpair-no">Vazgeç</button>
+        <button class="btn danger unpair-yes">Kaldır</button>
+      </div>
+    </div>`;
+  card.dataset.connected = String(peer.connected);
+  card.querySelector(".peer-name b").textContent = peer.name;
+  card.querySelector(".peer-state").textContent = peer.connected ? "Bağlı" : "Bağlantı bekleniyor";
+  card.querySelector(".peer-fingerprint").textContent = peer.fingerprint_prefix;
+  card.querySelector(".peer-address").textContent = peer.address || "—";
+  card.querySelector(".unpair-confirm p").textContent =
+    groupSize > 1
+      ? `${peer.name} ile paylaşım durur, diğer cihazlarla sürer. ${peer.name} öteki cihazlarla eşli kalır; tamamen çıkarmak için onlarda da kaldırın.`
+      : "Pano paylaşımı durur. Diğer bilgisayarda da eşleşmeyi kaldırmanız gerekir.";
+  const confirming = confirmingRemoval === peer.fingerprint_prefix;
+  card.querySelector(".unpair-ask").hidden = confirming;
+  card.querySelector(".unpair-confirm").hidden = !confirming;
+  card.querySelector(".unpair-ask button").addEventListener("click", () => {
+    confirmingRemoval = peer.fingerprint_prefix;
+    notify();
+  });
+  card.querySelector(".unpair-no").addEventListener("click", () => {
+    confirmingRemoval = null;
+    notify();
+  });
+  card.querySelector(".unpair-yes").addEventListener("click", () => {
+    confirmingRemoval = null;
+    // Son cihaz kaldırılınca kurulum ekranı açılır; ayarlar onun üstünde kalmasın.
+    if (groupSize === 1) setUi({ settingsOpen: false });
+    invoke("unpair", { fingerprintPrefix: peer.fingerprint_prefix });
+  });
+  return card;
+}
+
+/** Kartlar yalnız içerik değişince yeniden kurulur; yoksa açık onay ve odak kaybolurdu. */
+function renderPeers(peers) {
+  const cards = $("peer-cards");
+  const key = JSON.stringify([peers, confirmingRemoval]);
+  if (cards.dataset.key === key) return;
+  cards.dataset.key = key;
+  if (!peers.some((peer) => peer.fingerprint_prefix === confirmingRemoval)) confirmingRemoval = null;
+  cards.replaceChildren(...peers.map((peer) => peerCard(peer, peers.length)));
 }
 
 export function bindSettings() {
@@ -54,15 +109,9 @@ export function bindSettings() {
     if (error) showError($("open-files-error"), `Klasör açılamadı: ${error}`);
     else $("open-files-error").hidden = true;
   });
-  $("unpair").addEventListener("click", () => {
-    $("unpair-ask").hidden = true;
-    $("unpair-confirm").hidden = false;
-  });
-  $("unpair-no").addEventListener("click", resetUnpair);
-  $("unpair-yes").addEventListener("click", () => {
-    resetUnpair();
+  $("add-device").addEventListener("click", () => {
     setUi({ settingsOpen: false });
-    invoke("unpair");
+    invoke("start_pairing", { address: null });
   });
   $("log-copy").addEventListener("click", async () => {
     const text = await loadLog();
@@ -111,15 +160,9 @@ export function renderSettings({ view, ui, version }) {
   wasOpen = ui.settingsOpen;
 
   const snapshot = view.snapshot;
-  const peer = snapshot.peer;
-  $("settings-peer").hidden = !peer;
-  if (peer) {
-    $("peer-name").textContent = peer.name;
-    $("peer-fingerprint").textContent = peer.fingerprint_prefix;
-    $("peer-address").textContent = peer.address || "—";
-  } else {
-    resetUnpair();
-  }
+  $("settings-peers").hidden = snapshot.peers.length === 0;
+  renderPeers(snapshot.peers);
+  $("add-device").disabled = Boolean(view.engine_error);
   renderUpdate($("settings-update"), view.update, version);
   $("about-version").textContent = version ? `v${version}` : "";
   $("about-device").textContent = snapshot.device_name || "—";

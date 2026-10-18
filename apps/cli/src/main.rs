@@ -23,17 +23,20 @@ enum Command {
     ClipSetImage { path: std::path::PathBuf },
     /// Panoya dosya listesi yazar (Finder/Gezgin'de yapıştırılabilir).
     ClipSetFiles { paths: Vec<std::path::PathBuf> },
-    /// Cihaz kimliğini ve eşleşmiş eşi gösterir.
+    /// Cihaz kimliğini ve gruptaki eşleri gösterir.
     Id,
-    /// Eşleştirir. `--addr` yoksa aynı ağda `oc pair` çalıştıran cihazı kendisi bulur.
+    /// Eşleştirir (gruba cihaz ekler). `--addr` yoksa aynı ağda `oc pair` çalıştıran cihazı kendisi bulur.
     Pair {
         /// Karşı cihazın adresi (IP veya IP:PORT).
         #[arg(long)]
         addr: Option<String>,
     },
-    /// Eşleşmeyi kaldırır.
-    Unpair,
-    /// Eşle bağlantıyı ayakta tutar ve panoyu iki yönde senkronlar.
+    /// Bir eşi gruptan kaldırır.
+    Unpair {
+        /// Eşin parmak izi öneki (`oc id`).
+        prefix: String,
+    },
+    /// Gruptaki eşlerle bağlantıyı ayakta tutar ve panoyu senkronlar.
     Run,
 }
 
@@ -57,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
         Command::ClipSetFiles { paths } => clip::set_files(&paths)?,
         Command::Id => pair::show_identity()?,
         Command::Pair { addr } => pair::pair(addr).await?,
-        Command::Unpair => pair::unpair()?,
+        Command::Unpair { prefix } => pair::unpair(&prefix)?,
         Command::Run => run::run().await?,
     }
     Ok(())

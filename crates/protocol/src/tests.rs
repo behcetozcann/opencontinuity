@@ -44,6 +44,9 @@ async fn every_message_type_round_trips() {
         Message::ImageChunk { data: Chunk(vec![1, 2, 3]) },
         Message::Ping { nonce: u64::MAX },
         Message::Pong { nonce: 0 },
+        Message::Peers {
+            peers: vec![PeerInfo { name: "Linux".into(), fingerprint: [4; 32], address: Some("192.168.1.9:47800".into()) }],
+        },
     ];
     for message in messages {
         assert_eq!(round_trip(&message).await, message);
@@ -149,4 +152,13 @@ fn malformed_chunk_sequences_are_rejected() {
     let mut assembler = Assembler::default();
     assembler.push(start).unwrap();
     assert!(assembler.push(Message::ImageChunk { data: Chunk(vec![0; 16]) }).is_err(), "PNG olmayan birleşim");
+}
+
+#[test]
+fn oversized_group_is_rejected() {
+    let peer = PeerInfo { name: "a".into(), fingerprint: [1; 32], address: None };
+    assert!(encode(&Message::Peers { peers: vec![peer.clone(); MAX_GROUP_PEERS] }).is_ok());
+    assert!(encode(&Message::Peers { peers: vec![peer.clone(); MAX_GROUP_PEERS + 1] }).is_err());
+    let long_name = PeerInfo { name: "a".repeat(257), ..peer };
+    assert!(encode(&Message::Peers { peers: vec![long_name] }).is_err());
 }

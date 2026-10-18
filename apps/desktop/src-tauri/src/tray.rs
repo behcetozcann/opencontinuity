@@ -91,7 +91,7 @@ pub fn refresh(app: &AppHandle, view: &View) {
     {
         let _ = items.status.set_text(status_text(view));
         let _ = items.sharing.set_checked(!view.snapshot.paused);
-        let _ = items.sharing.set_enabled(view.snapshot.peer.is_some());
+        let _ = items.sharing.set_enabled(!view.snapshot.peers.is_empty());
     }
     set_look(&tray, look(view));
     let _ = tray.set_tooltip(Some(format!("OpenContinuity — {}", status_text(view))));
@@ -142,23 +142,29 @@ fn status_text(view: &View) -> String {
     if snapshot.pairing.is_some() {
         return "Eşleştiriliyor…".into();
     }
-    let Some(peer) = &snapshot.peer else {
-        return "Eşleşmiş cihaz yok".into();
+    let (connected, total) = (snapshot.connected_count(), snapshot.peers.len());
+    let group = match snapshot.peers.as_slice() {
+        [] => return "Eşleşmiş cihaz yok".into(),
+        [peer] => peer.name.clone(),
+        _ if connected == total => format!("{total} cihaz"),
+        _ => format!("{connected}/{total} cihaz"),
     };
     if snapshot.paused {
-        format!("Duraklatıldı · {}", peer.name)
-    } else if snapshot.connected_ip.is_some() {
-        format!("Bağlı · {}", peer.name)
+        format!("Duraklatıldı · {group}")
+    } else if connected > 0 {
+        format!("Bağlı · {group}")
     } else {
-        format!("Bağlantı bekleniyor · {}", peer.name)
+        format!("Bağlantı bekleniyor · {group}")
     }
 }
 
 fn look(view: &View) -> Look {
-    match (&view.snapshot.connected_ip, view.snapshot.paused) {
-        (_, true) => Look::Paused,
-        (Some(_), false) if view.engine_error.is_none() => Look::Connected,
-        _ => Look::Waiting,
+    if view.snapshot.paused {
+        Look::Paused
+    } else if view.snapshot.connected_count() > 0 && view.engine_error.is_none() {
+        Look::Connected
+    } else {
+        Look::Waiting
     }
 }
 

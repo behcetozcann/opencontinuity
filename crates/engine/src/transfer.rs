@@ -6,10 +6,12 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::anyhow;
 use oc_core::SyncState;
+use oc_pairing::Fingerprint;
 use oc_protocol::{ClipEvent, ContentKind, DeviceId, Message, Payload};
 
 use crate::events::Event;
 use crate::files::{self, Collected};
+use crate::group::Group;
 use crate::link::{Completion, Link, Outcome, is_bulk};
 use crate::{Clip, Context};
 
@@ -21,17 +23,17 @@ pub struct Pending {
     copied_at: SystemTime,
 }
 
-/// Yerel kopyayı gönderir. Bağlantı yazma görevi bittiyse hata döner (bağlantı koptu).
+/// Yerel kopyayı bağlı bütün eşlere gönderir; bağlı olmayanlar için bekletir.
+/// Yazma görevi biten (bağlantısı kopmuş) eşlerin parmak izini ve hatayı döner.
 pub async fn send_local(
     context: &mut Context,
     state: &mut SyncState,
-    link: &mut Option<Link>,
-    pending: &mut Option<Pending>,
+    group: &mut Group,
     copy: Clip,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<(Fingerprint, String)>> {
     // Duraklatılmışken saat ilerletilmez; yoksa eşin sonraki kopyaları eski görünürdü.
     if context.events.snapshot().paused {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let (payload, sources) = match copy {
         Clip::Text(text) => (Payload::Text(text), Vec::new()),
@@ -43,11 +45,11 @@ pub async fn send_local(
                 Ok(Collected::TooLarge { bytes }) => {
                     let limit = oc_protocol::MAX_FILES_BYTES;
                     context.events.emit(Event::TooLarge { content: ContentKind::Files, bytes, limit });
-                    return Ok(());
+                    return Ok(Vec::new());
                 }
                 Err(error) => {
                     context.events.emit(Event::Skipped { reason: format!("Dosyalar okunamadı: {error:#}") });
-                    return Ok(());
+                    return Ok(Vec::new());
                 }
             }
         }
@@ -55,18 +57,30 @@ pub async fn send_local(
     let (content, bytes, limit) = (payload.kind(), payload.len(), payload.max_bytes());
     if bytes > limit {
         context.events.emit(Event::TooLarge { content, bytes, limit });
-        return Ok(());
+        return Ok(Vec::new());
     }
-    let Some(event) = state.on_local(payload) else { return Ok(()) };
-    let Some(active) = link.as_mut() else {
+    let Some(event) = state.on_local(payload) else { return Ok(Vec::new()) };
+    let mut failed = Vec::new();
+    let mut sent_any = false;
+    for member in &mut group.members {
+        let Some(link) = member.link.as_mut() else {
+            member.pending = Some(Pending { event: event.clone(), sources: sources.clone(), copied_at: SystemTime::now() });
+            continue;
+        };
+        member.pending = None;
+        match link.send_clip(event.clone(), sources.clone()) {
+            Ok(()) => sent_any = true,
+            Err(error) => failed.push((member.peer.fingerprint, error.to_string())),
+        }
+    }
+    if sent_any {
+        report_sending(context, &event);
+    } else {
         let minutes = context.config.timing.offline_copy_max_age.as_secs() / 60;
-        let reason = format!("Eş bağlı değil; {minutes} dk içinde bağlanırsa gönderilecek.");
+        let reason = format!("Bağlı cihaz yok; {minutes} dk içinde bağlanırsa gönderilecek.");
         context.events.emit(Event::Skipped { reason });
-        *pending = Some(Pending { event, sources, copied_at: SystemTime::now() });
-        return Ok(());
-    };
-    *pending = None;
-    send_event(context, active, event, sources)
+    }
+    Ok(failed)
 }
 
 /// Kopukken yapılan kopyayı yeni kurulan bağlantıdan gönderir; eskiyse bırakır.
@@ -85,33 +99,40 @@ pub fn send_pending(context: &mut Context, link: &mut Link, pending: &mut Option
         return Ok(());
     }
     context.events.diagnostic(format!("Bağlantı kopukken yapılan kopya ({} sn önce) gönderiliyor.", age.as_secs()));
-    send_event(context, link, event, sources)
+    // "Gönderiliyor" bildirilmez: kopya başka eşlere gittiyse sonucu zaten bildirildi.
+    link.send_clip(event, sources)
+
 }
 
-fn send_event(context: &mut Context, link: &mut Link, event: ClipEvent, sources: Vec<PathBuf>) -> anyhow::Result<()> {
+fn report_sending(context: &mut Context, event: &ClipEvent) {
     let (content, bytes, items) = (event.payload.kind(), event.payload.len(), items_of(&event.payload));
-    link.send_clip(event, sources)?;
     if is_bulk(content) {
         context.events.emit(Event::Sending { content, bytes, items });
     }
-    Ok(())
 }
 
-/// Bağlantı kullanılamaz hale geldiyse nedeni döner.
-pub fn on_completion(context: &mut Context, completion: Completion) -> Option<String> {
+/// Bağlantı kullanılamaz hale geldiyse nedeni döner. Aynı kopya birden çok
+/// eşe gittiği için sonuç kopya başına bir kez bildirilir (`reported`: son
+/// bildirilen Lamport).
+pub fn on_completion(context: &mut Context, completion: Completion, reported: &mut Option<u64>) -> Option<String> {
     let Completion { content, bytes, items, lamport, outcome } = completion;
+    let first_report = *reported != Some(lamport);
     match outcome {
+        Outcome::LinkFailed(reason) => return Some(reason),
+        _ if !first_report => {}
         Outcome::Delivered => context.events.emit(Event::Sent { content, bytes, items, lamport }),
         Outcome::Superseded => {
             context.events.emit(Event::Skipped { reason: "Yeni kopya geldi; önceki aktarım bırakıldı.".into() });
         }
         Outcome::SourceFailed(reason) => context.events.emit(Event::Skipped { reason: format!("Gönderilemedi: {reason}") }),
-        Outcome::LinkFailed(reason) => return Some(reason),
     }
+    *reported = Some(lamport);
     None
 }
 
-pub fn apply_remote(context: &mut Context, state: &mut SyncState, sender: &DeviceId, event: ClipEvent) -> anyhow::Result<()> {
+/// `sender`: olayı gönderen eşin kimliği ve adı.
+pub fn apply_remote(context: &mut Context, state: &mut SyncState, sender: (&DeviceId, &str), event: ClipEvent) -> anyhow::Result<()> {
+    let (sender, from) = (sender.0, sender.1.to_owned());
     let (content, bytes, items) = (event.payload.kind(), event.payload.len(), items_of(&event.payload));
     let files_dir = context.config.files_dir.clone();
     if context.events.snapshot().paused {
@@ -140,20 +161,22 @@ pub fn apply_remote(context: &mut Context, state: &mut SyncState, sender: &Devic
             }
         },
     };
-    context.events.emit(Event::Received { content, bytes, items, lamport: event.lamport, saved_to });
+    context.events.emit(Event::Received { content, bytes, items, lamport: event.lamport, from, saved_to });
     context.clipboard.writes.send(clip).map_err(|_| anyhow!("pano iş parçacığı durdu"))
 }
 
 /// Okuma görevinin aktarım bildirimleri (başladı/bırakıldı).
-pub fn on_notice(context: &mut Context, message: &Message) {
+pub fn on_notice(context: &mut Context, message: &Message, from: &str) {
     let paused = context.events.snapshot().paused;
+    let from = from.to_owned();
     match message {
         Message::ImageStart { total_bytes, .. } if !paused => {
-            context.events.emit(Event::Receiving { content: ContentKind::Image, bytes: u64::from(*total_bytes), items: 1 });
+            let bytes = u64::from(*total_bytes);
+            context.events.emit(Event::Receiving { content: ContentKind::Image, bytes, items: 1, from });
         }
         Message::FilesStart { files, .. } if !paused => {
             let (bytes, items) = (files.total_bytes(), files.top_level_count());
-            context.events.emit(Event::Receiving { content: ContentKind::Files, bytes, items });
+            context.events.emit(Event::Receiving { content: ContentKind::Files, bytes, items, from });
         }
         Message::TransferCancel => context.events.emit(Event::Skipped { reason: "Gönderen aktarımı bıraktı.".into() }),
         _ => {}

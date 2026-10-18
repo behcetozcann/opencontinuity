@@ -42,7 +42,7 @@ function pairingNotice(error) {
 /** Görünümden gösterilecek kartı seçer: motor hatası > yerel ağ izni > güncelleme. */
 export function pickNotice(view, { includePairing }) {
   if (view.engine_error) return engineNotice(view.engine_error);
-  const networkError = [view.snapshot.link_error, view.pairing_error].find((error) => error && LOCAL_NETWORK.test(error));
+  const networkError = [...view.snapshot.peers.map((peer) => peer.link_error), view.pairing_error].find((error) => error && LOCAL_NETWORK.test(error));
   if (isMac && networkError) return localNetworkNotice(networkError);
   if (updateNeedsAttention(view.update)) return { update: true };
   if (includePairing && view.pairing_error) return pairingNotice(view.pairing_error);

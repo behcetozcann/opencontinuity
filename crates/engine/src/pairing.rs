@@ -13,7 +13,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::time::timeout;
 
 use crate::events::{Emitter, Event, PairingStage};
-use crate::link::Link;
+use crate::link::{self, Link};
 use crate::{ClipboardPort, Command, Context, EngineConfig, Flow, config, next_found};
 
 /// Hata olursa `PairingFailed` yayınlanır ve boşta durumuna dönülür.
@@ -43,7 +43,8 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
         fingerprint: session.peer_fingerprint,
         last_address: Some(peer_address.to_string()),
     };
-    let mut link = Link::start(session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone());
+    let (outlets, mut inlets) = link::channels();
+    let mut link = Link::start(0, session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone(), &outlets);
     let name = peer.name.clone();
     context.events.update(|snapshot| snapshot.pairing = Some(PairingStage::Confirm { peer: name, code }));
 
@@ -72,7 +73,7 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
                 Some(Command::Resume) => context.events.update(|snapshot| snapshot.paused = false),
                 Some(_) => {}
             },
-            message = link.recv() => match message {
+            message = inlets.incoming.recv() => match message.map_or_else(|| Err(anyhow!("okuma görevi bitti")), |(_, message)| message) {
                 Ok(Message::PairDecision { accepted: true }) => peer_accepted = true,
                 Ok(Message::PairDecision { accepted: false }) => bail!("karşı cihaz reddetti; hiçbir şey kaydedilmedi"),
                 Ok(_) => bail!("eş beklenmeyen mesaj gönderdi"),
@@ -83,7 +84,7 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
             }
         }
     }
-    context.store.save(&peer)?;
+    context.store.upsert(&peer)?;
     context.events.emit(Event::Paired { peer: peer.name });
     Ok(Flow::Continue)
 }
