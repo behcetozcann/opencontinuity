@@ -41,11 +41,17 @@ Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 
 Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3 sn sonra aynı içerikle yeniden yazar → aynı görsel 2 kez gider (kullanıcı filtre istemedi). Win+Shift+S alıntısı kopyalamadan panoya girer, Mac ⌘⇧4 dosyaya kaydeder.
 
+0.1.5–0.1.7 (2026-10-18 akşam):
+- Hareket azaltma (Windows "Animasyon efektleri" kapalı → `prefers-reduced-motion`): durum animasyonları kalır, yer değiştiren hareketler solmaya döner (`components.css` sonu). Gerçek cihazda onaylı.
+- Kopukken yapılan son kopya 2 dk içinde bağlanılırsa kopyalandığı andaki Lamport'la gider (`transfer::Pending`, `Timing::offline_copy_max_age`, duvar saatiyle). Testli; **gerçek cihazda denenmedi**.
+- Windows girişte başlatma: kayıt HKCU'ya, öneksiz/tırnaklı (`auto-launch` Dynamic kipi HKLM'ye `\\?\` önekli yazıyordu); her açılışta yenilenir, yalnız Ayarlar'dan kapatma `autostart-disabled` ile hatırlanır. Gerçek cihazda onaylı (F10).
+- 0.1.7 noterlikli; Gatekeeper kabul ediyor.
+
 Sıradaki:
-1. **0.1.5 gerçek cihaz onayı bekliyor:** (a) Windows "Animasyon efektleri" kapalıydı (kullanıcı doğruladı); `prefers-reduced-motion`'da artık her şey durmuyor, yalnız yer değiştiren hareketler solmaya dönüyor (`components.css` sonu). (b) Kopukken yapılan son kopya 2 dk içinde bağlanılırsa gönderiliyor (`transfer::Pending`, `Timing::offline_copy_max_age`).
-2. (Tamam) Noterlik: 0.1.7 noterlikli yayınlandı, Gatekeeper kabul ediyor.
-3. Faz 1 testleri tamam (F1, F5, F9 Çık, F10 kullanıcı 2026-10-18 toplu "sorunsuz" dedi). Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
-4. Faz 2 devamı (plan §9): çoklu cihaz, Linux; isteğe bağlı "dosya paylaşımı" anahtarı (Gezgin'de yerel taşıma için yapılan her kopya da karşıya gidiyor).
+1. Kopukken kopya gerçek cihaz testi: Mac kapak kapat/aç, bağlanmadan kopyala → Windows'ta yapıştır.
+2. Faz 2 devamı (plan §9) — kullanıcıya seçim soruldu, cevap bekliyor; önerim **çoklu cihaz** (Linux/mobil buna dayanır). Diğerleri: Linux, pano geçmişi/tercihler, isteğe bağlı "dosya paylaşımı" anahtarı (Gezgin'de yerel taşıma için yapılan her kopya da karşıya gidiyor).
+3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi). Faz 1 testleri tamam.
+4. Kökte izlenmeyen `AGENTS.md` var (bu oturum yazmadı; dokunulmadı).
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap; `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
 
