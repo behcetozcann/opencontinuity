@@ -44,6 +44,7 @@ pub struct Node {
     pub dir: tempfile::TempDir,
     /// Gelen dosyaların kaydedildiği klasör.
     pub files: tempfile::TempDir,
+    task: tokio::task::JoinHandle<()>,
 }
 
 impl Node {
@@ -70,8 +71,17 @@ impl Node {
             files_dir: files.path().to_path_buf(),
         };
         let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_copies, writes }));
-        tokio::spawn(async move { engine.run().await.unwrap() });
-        Self { handle, events, copy, written, port, dir, files }
+        let task = tokio::spawn(async move { engine.run().await.unwrap() });
+        Self { handle, events, copy, written, port, dir, files, task }
+    }
+
+    /// Motoru kapatır ve bitmesini bekler; aynı dizin ve portla yeniden
+    /// başlatılabilsin. Sahte pano kanalı motor bitene kadar açık tutulur,
+    /// yoksa motor "pano iş parçacığı durdu" diye hatayla çıkabilir.
+    pub async fn stop(self) -> (tempfile::TempDir, u16) {
+        self.handle.send(Command::Shutdown);
+        timeout(WAIT, self.task).await.expect("motor kapanmadı").expect("motor hatayla bitti");
+        (self.dir, self.port)
     }
 
     /// Koşulu sağlayan olay gelene kadar bekler; diğer olaylar atlanır.

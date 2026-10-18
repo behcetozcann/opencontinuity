@@ -74,7 +74,7 @@ async fn pause_blocks_sending_and_applying() {
 #[tokio::test]
 async fn copy_made_while_disconnected_is_sent_on_reconnect() {
     let (mut mac, windows) = paired_and_connected().await;
-    let (windows_dir, windows_port) = stop(windows);
+    let (windows_dir, windows_port) = windows.stop().await;
     mac.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
 
     mac.copy.send(text("kopukken")).await.unwrap();
@@ -90,7 +90,7 @@ async fn stale_offline_copy_is_not_sent() {
     let mut windows = Node::start("windows");
     pair(&mut mac, &mut windows).await;
     windows.wait_connected().await;
-    let (windows_dir, windows_port) = stop(windows);
+    let (windows_dir, windows_port) = windows.stop().await;
     mac.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
 
     mac.copy.send(text("eski")).await.unwrap();
@@ -98,11 +98,6 @@ async fn stale_offline_copy_is_not_sent() {
     mac.wait_for(|event| matches!(event, Event::Skipped { reason } if reason.contains("gönderilmedi"))).await;
     windows.wait_connected().await;
     windows.assert_nothing_written(Duration::from_millis(400)).await;
-}
-
-fn stop(node: Node) -> (tempfile::TempDir, u16) {
-    node.handle.send(Command::Shutdown);
-    (node.dir, node.port)
 }
 
 #[tokio::test]

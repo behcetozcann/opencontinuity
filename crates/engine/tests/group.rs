@@ -3,7 +3,7 @@ mod common;
 use std::time::Duration;
 
 use common::{Node, fast_timing, pair, paired_and_connected, text, unpair};
-use oc_engine::{Command, Event};
+use oc_engine::Event;
 use oc_pairing::PeerStore;
 
 /// Mac–Windows eşli; Linux yalnız Windows'la kod onaylar, Mac onu Windows'tan öğrenir.
@@ -40,8 +40,7 @@ async fn third_device_joins_through_any_member_and_all_sync() {
 #[tokio::test]
 async fn offline_member_gets_copy_on_return_while_others_keep_syncing() {
     let (mut mac, windows, linux) = group_of_three().await;
-    let (linux_dir, linux_port) = (linux.dir, linux.port);
-    linux.handle.send(Command::Shutdown);
+    let (linux_dir, linux_port) = linux.stop().await;
     mac.wait_for(|event| matches!(event, Event::Disconnected { peer, .. } if peer == "linux")).await;
 
     mac.copy.send(text("linux yokken")).await.unwrap();
@@ -57,8 +56,7 @@ async fn removed_member_is_not_reintroduced_by_others() {
     mac.wait_state(|snapshot| snapshot.peers.len() == 1).await;
 
     // Windows yeniden başlayıp Mac'e bağlanınca grup listesini (Linux dahil) yeniden gönderir.
-    let (windows_dir, windows_port) = (windows.dir, windows.port);
-    windows.handle.send(Command::Shutdown);
+    let (windows_dir, windows_port) = windows.stop().await;
     let windows = Node::start_at("windows", windows_dir, windows_port, fast_timing());
     mac.wait_for(|event| matches!(event, Event::Diagnostic { message } if message.starts_with("Bağlandı: windows"))).await;
 
