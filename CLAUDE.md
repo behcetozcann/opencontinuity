@@ -52,7 +52,7 @@ Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket i�
 ## Yayın akışı
 
 1. `Cargo.toml` `[workspace.package] version` artır, commit, `git tag -a vX.Y.Z`, push.
-2. `gh workflow run release.yml -R behcetozcann/opencontinuity --ref vX.Y.Z` (etiket push'u şu an tetiklemiyor).
+2. `gh workflow run release.yml -R behcetozcann/opencontinuity --ref vX.Y.Z -f notarize=false` (etiket push'u şu an tetiklemiyor). `notarize` varsayılanı açık: unutulursa iş Apple kuyruğunda saatlerce bekler (0.1.5'te oldu, iptal edildi). Noterlik `notary-status.sh` "Accepted" görene kadar kapalı.
 3. Derleme bitince `scripts/publish-release.sh vX.Y.Z --publish`: çıktıları indirir, `latest.json` üretir, Release'e yükler. Kurulu uygulamalar 6 saatte bir (ya da Ayarlar → Denetle) bulur.
 4. Noterlik durumu: `scripts/notary-status.sh` (Apple'da web sayfası yok).
 
