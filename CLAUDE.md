@@ -31,7 +31,7 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 
 ## Durum (2026-10-18, oturum sonu)
 
-Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.4** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (`notarize=false`; kullanıcı Apple'ı beklememeyi seçti). İki cihaz güncelleyiciyle 0.1.4'te, bağlı. Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
+Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.5** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (`notarize=false`; kullanıcı Apple'ı beklememeyi seçti). İki cihaz güncelleyiciyle 0.1.4'te, bağlı. Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
 
 Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 - Görsel panosu (0.1.3, v4): PNG, ≤ 32 MiB, 256 KiB parçalar. macOS `public.png`/TIFF→PNG; Windows `PNG` biçimi (IEND'e göre kırpılır) / CF_DIB→PNG, yazarken PNG + CF_DIB. Metin + görsel birlikteyse metin gider.
@@ -42,9 +42,9 @@ Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3 sn sonra aynı içerikle yeniden yazar → aynı görsel 2 kez gider (kullanıcı filtre istemedi). Win+Shift+S alıntısı kopyalamadan panoya girer, Mac ⌘⇧4 dosyaya kaydeder.
 
 Sıradaki:
-1. **Windows'ta animasyonlar duruyor** (kullanıcı bildirdi, çözülmedi). Tahmin: Windows "Animasyon efektleri" kapalı → `prefers-reduced-motion` → CSS bilerek durduruyor. Kullanıcıya ayar soruldu, cevap yok. Ayar açıksa: arayüz açılışta `matchMedia('(prefers-reduced-motion: reduce)').matches`'ı teşhis kaydına yazsın, ölçerek bul.
+1. **0.1.5 gerçek cihaz onayı bekliyor:** (a) Windows "Animasyon efektleri" kapalıydı (kullanıcı doğruladı); `prefers-reduced-motion`'da artık her şey durmuyor, yalnız yer değiştiren hareketler solmaya dönüyor (`components.css` sonu). (b) Kopukken yapılan son kopya 2 dk içinde bağlanılırsa gönderiliyor (`transfer::Pending`, `Timing::offline_copy_max_age`).
 2. `scripts/notary-status.sh` → "Accepted" ise noterlikli sürüm (`notarize` varsayılan açık) + `spctl -a -vv` doğrula. 2026-10-18 öğlen hâlâ "In Progress".
-3. Faz 1 kalanları: F1, F5 (kaldır → yeniden eşleştir), F10 (yeniden başlatınca kendiliğinden başlama), F9'da Çık. Açık bulgular: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi); kopukken yapılan kopya bağlanınca gönderilmiyor (kullanıcı kararı bekleniyor).
+3. Faz 1 testleri tamam (F1, F5, F9 Çık, F10 kullanıcı 2026-10-18 toplu "sorunsuz" dedi). Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 4. Faz 2 devamı (plan §9): çoklu cihaz, Linux; isteğe bağlı "dosya paylaşımı" anahtarı (Gezgin'de yerel taşıma için yapılan her kopya da karşıya gidiyor).
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap; `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).

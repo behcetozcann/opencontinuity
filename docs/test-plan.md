@@ -40,16 +40,16 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 
 | # | Senaryo | Mac | Windows |
 |---|---|---|---|
-| F1 | Kurulum/ilk açılış: Gatekeeper / SmartScreen uyarısı (adımlar not edilir) | [ ] | [ ] |
+| F1 | Kurulum/ilk açılış: Gatekeeper / SmartScreen uyarısı (adımlar not edilir) | [x] kullanıcı: sorunsuz (2026-10-18, toplu onay) | [x] kullanıcı: sorunsuz (2026-10-18, toplu onay) |
 | F2 | macOS yerel ağ izni ve pano gizlilik uyarısı çıkıyor mu? (sonuç not edilir) | [x] v0.1.2 (Developer ID): Yerel Ağ izni güncellemeden sonra tuttu, eş bulundu; pano uyarısı çıkmadı | — |
 | F3 | Menü çubuğu / tepsi simgesi ve menüsü görünür; Dock'ta simge yok | [x] LSUIElement; Dock'a elle sabitlenmişse noktasız simge kalır (kullanıcı kaldırdı) | [x] |
 | F4 | Faz 0 eşleşmesiyle açılınca kendiliğinden bağlanır | [ ] | [ ] |
-| F5 | Uygulamadan eşleşmeyi kaldır → iki tarafta Eşleştir → aynı kod → eşleşir | [ ] | [ ] |
+| F5 | Uygulamadan eşleşmeyi kaldır → iki tarafta Eşleştir → aynı kod → eşleşir | [x] kullanıcı: sorunsuz (2026-10-18, toplu onay) | [x] kullanıcı: sorunsuz (2026-10-18, toplu onay) |
 | F6 | Mac → Windows: Türkçe + emoji + çok satır, Not Defteri'nde görsel kontrol | [x] 115 bayt gönderildi | [x] Türkçe/çok satır/sekme doğru; bayrak 🇹🇷 Windows'ta çizilmiyor (yazı tipi), bayt olarak korunuyor (F7 dönüşünde aynı) |
 | F7 | Windows → Mac metin | [x] Not Defteri'nden dönen satır ZWJ aile + bayrak dahil bayt bayt aynı, CRLF yok | [x] |
 | F8 | Duraklat: gönderilmez, gelen uygulanmaz; Devam et sonrası ilk kopya gider | [x] duraklatmada yerel kopya gönderilmedi, gelen 3 kopya uygulanmadı; devamda ilk kopya gitti (lamport 8) | [x] devam sonrası gelen yapıştırıldı |
-| F9 | Pencere kapatılınca uygulama tepside çalışmayı sürdürür; Çık ile kapanır | [x] pencere kapandı, süreç sürdü (Çık denenmedi) | [x] (Çık denenmedi) |
-| F10 | Oturum kapat/aç (veya yeniden başlat) sonrası kendiliğinden başlar ve bağlanır | [ ] | [ ] |
+| F9 | Pencere kapatılınca uygulama tepside çalışmayı sürdürür; Çık ile kapanır | [x] pencere kapandı, süreç sürdü; Çık: kullanıcı sorunsuz (2026-10-18) | [x] Çık: kullanıcı sorunsuz (2026-10-18) |
+| F10 | Oturum kapat/aç (veya yeniden başlat) sonrası kendiliğinden başlar ve bağlanır | [x] kullanıcı: sorunsuz (2026-10-18, toplu onay) | [x] kullanıcı: sorunsuz (2026-10-18, toplu onay) |
 | F11 | Uyku/uyanma ve Wi-Fi kapat/aç sonrası toparlanır | [x] kapak 12:10:28–12:14:09; uyanınca kopma hemen algılandı, ~31 sn sonra kendiliğinden bağlandı (Windows Wi-Fi de kapalıydı, iki olay örtüştü). Kopukken yapılan kopya bağlanınca gönderilmedi, tekrar kopyalamak gerekti | [x] Wi-Fi kapat/aç sonrası kendiliğinden bağlandı |
 | F12 | İkinci kez açmak yeni örnek başlatmaz, mevcut pencereyi öne getirir | [x] `open` sonrası tek süreç, pencere ekranda | [x] mevcut pencere geldi |
 
@@ -100,5 +100,5 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 - **Port 47800 dolu (2026-10-17):** Faz 0 testinden kalan arka plan `oc run` portu tutuyordu. Hata bandında "Yeniden dene" eklendi; port doluyken de kayıtlı eş gösteriliyor.
 - **IP'siz eşleştirme sonrası ilk kopya (2026-10-17):** "Firma Adı, İl / İlçe ve Açık Adres" 40 bayt, hash ba018a43 iki uçta aynı.
 - **Windows, Mac'in uykusunu geç fark etti (2026-10-18):** Mac kapağı 12:10:28'de kapandı, 12:14:09'da açıldı; Windows `eş 15 sn yanıt vermedi`'yi ancak 12:14:27'de yazdı (beklenen ~12:10:45). Arada Windows'tan kopya olsaydı "Gönderildi" görünüp kaybolurdu. Heartbeat kodu (5 sn ping, 15 sn `last_seen`) doğru görünüyor; aynı testte Windows Wi-Fi'si de kapatılıp açıldığı için olaylar örtüştü. Sıradaki: yalnız kapak kapat/aç, Windows'a dokunmadan, Windows `oc.log` ile yeniden üret. Not: macOS'ta kayıt zamanı (`Instant`) uykuda durur; duvar saatini `pmset -g log` + süreç başlangıcıyla eşledim, kayda duvar saati eklemek teşhisi kolaylaştırır.
-- **Kopukken yapılan kopya kayboluyor (2026-10-18):** bağlantı yokken kopya `Eş bağlı değil; kopya gönderilmedi.` ile atılıyor, bağlanınca gönderilmiyor; kullanıcı Windows'ta 5–6 kez eski metni yapıştırdı. Bağlanınca son bekleyen kopyayı göndermek tasarım kararı — kullanıcıya soruldu.
+- **Kopukken yapılan kopya kayboluyor (2026-10-18):** bağlantı yokken kopya `Eş bağlı değil; kopya gönderilmedi.` ile atılıyor, bağlanınca gönderilmiyor; kullanıcı Windows'ta 5–6 kez eski metni yapıştırdı. Bağlanınca son bekleyen kopyayı göndermek tasarım kararı — kullanıcıya soruldu. **Çözüm (0.1.5, gerçek cihazda denenmedi):** kopukken yapılan son kopya saklanır, 2 dk içinde bağlanılırsa kopyalandığı andaki Lamport değeriyle gönderilir (eş o arada kendisi kopyaladıysa iki taraf aynı sonuca varır); daha eskiyse bırakılır. Testler: `copy_made_while_disconnected_is_sent_on_reconnect`, `stale_offline_copy_is_not_sent`.
 - **Duraklatmada 3 kopya (2026-10-18):** Windows'tan 0,5 sn arayla 3 × 17 bayt geldi; Windows kaydı her birinin ayrı Chrome kopyası olduğunu gösterdi (sayaç +9, kullanıcı birkaç kez bastı). Hata değil.

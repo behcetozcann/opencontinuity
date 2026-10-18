@@ -2,8 +2,8 @@ mod common;
 
 use std::time::Duration;
 
-use common::{Node, code_of, pair, paired_and_connected, text};
-use oc_engine::{Clip, Command, ContentKind, Event, PairingStage};
+use common::{Node, code_of, fast_timing, free_port, pair, paired_and_connected, text};
+use oc_engine::{Clip, Command, ContentKind, Event, PairingStage, Timing};
 use oc_pairing::{Identity, Peer, PeerStore};
 use oc_protocol::Message;
 use oc_transport::Trust;
@@ -67,6 +67,42 @@ async fn pause_blocks_sending_and_applying() {
     mac.wait_state(|snapshot| !snapshot.paused).await;
     mac.copy.send(text("devam")).await.unwrap();
     assert_eq!(windows.next_written().await, text("devam"));
+}
+
+/// Gerçek cihaz testinde görüldü (F11): uykudan uyanan Mac'te bağlantı gelmeden
+/// yapılan kopya, bağlanınca gönderilmiyordu.
+#[tokio::test]
+async fn copy_made_while_disconnected_is_sent_on_reconnect() {
+    let (mut mac, windows) = paired_and_connected().await;
+    let (windows_dir, windows_port) = stop(windows);
+    mac.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
+
+    mac.copy.send(text("kopukken")).await.unwrap();
+    mac.wait_for(|event| matches!(event, Event::Skipped { reason } if reason.contains("gönderilecek"))).await;
+    let windows = Node::start_at("windows", windows_dir, windows_port, fast_timing());
+    assert_eq!(windows.next_written().await, text("kopukken"));
+}
+
+#[tokio::test]
+async fn stale_offline_copy_is_not_sent() {
+    let expiring = Timing { offline_copy_max_age: Duration::ZERO, ..fast_timing() };
+    let mut mac = Node::start_at("mac", tempfile::tempdir().unwrap(), free_port(), expiring);
+    let mut windows = Node::start("windows");
+    pair(&mut mac, &mut windows).await;
+    windows.wait_connected().await;
+    let (windows_dir, windows_port) = stop(windows);
+    mac.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
+
+    mac.copy.send(text("eski")).await.unwrap();
+    let mut windows = Node::start_at("windows", windows_dir, windows_port, fast_timing());
+    mac.wait_for(|event| matches!(event, Event::Skipped { reason } if reason.contains("gönderilmedi"))).await;
+    windows.wait_connected().await;
+    windows.assert_nothing_written(Duration::from_millis(400)).await;
+}
+
+fn stop(node: Node) -> (tempfile::TempDir, u16) {
+    node.handle.send(Command::Shutdown);
+    (node.dir, node.port)
 }
 
 #[tokio::test]

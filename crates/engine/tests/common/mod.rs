@@ -21,6 +21,7 @@ pub fn fast_timing() -> Timing {
         dial_timeout: Duration::from_secs(1),
         min_backoff: Duration::from_millis(50),
         max_backoff: Duration::from_millis(400),
+        offline_copy_max_age: Duration::from_secs(120),
     }
 }
 
@@ -52,7 +53,11 @@ impl Node {
     }
 
     pub fn start_in(name: &str, dir: tempfile::TempDir) -> Self {
-        let port = free_port();
+        Self::start_at(name, dir, free_port(), fast_timing())
+    }
+
+    /// Yeniden başlatmayı taklit eder: aynı dizin ve port, istenen zamanlama.
+    pub fn start_at(name: &str, dir: tempfile::TempDir, port: u16, timing: Timing) -> Self {
         let files = tempfile::tempdir().unwrap();
         let (copy, local_copies) = mpsc::channel(8);
         let (writes, written) = std_mpsc::channel();
@@ -61,7 +66,7 @@ impl Node {
             device_name: name.to_owned(),
             port,
             discovery: false,
-            timing: fast_timing(),
+            timing,
             files_dir: files.path().to_path_buf(),
         };
         let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_copies, writes }));

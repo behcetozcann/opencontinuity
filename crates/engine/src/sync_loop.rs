@@ -14,6 +14,7 @@ use tokio::time::{Instant, interval, sleep_until, timeout};
 
 use crate::events::{Emitter, Event, PeerSummary};
 use crate::link::{Link, LinkEvent, next_event};
+use crate::transfer::Pending;
 use crate::{Command, Context, Flow, Timing, files, next_found, transfer};
 
 pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> {
@@ -45,6 +46,7 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
     let dialer = context.identity.fingerprint() < peer.fingerprint;
     let mut addresses: Vec<SocketAddr> = peer.last_address.iter().filter_map(|address| address.parse().ok()).collect();
     let mut link: Option<Link> = None;
+    let mut pending: Option<Pending> = None;
     let mut retry = Retry::new(timing);
     let mut heartbeat = interval(timing.heartbeat_interval);
 
@@ -67,7 +69,7 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
                 match timeout(timing.handshake_timeout, oc_transport::accept(tcp, &context.identity, trust, port)).await {
                     Ok(Ok(session)) => {
                         let address = SocketAddr::new(remote.ip(), session.peer_listen_port);
-                        link = activate(context, &mut peer, &mut addresses, session, address, &state).await?;
+                        link = activate(context, &mut peer, &mut addresses, session, address, &state, &mut pending).await?;
                     }
                     Ok(Err(error)) => context.events.diagnostic(format!("Reddedilen bağlantı: {} ({error})", remote.ip())),
                     Err(_) => context.events.diagnostic(format!("Reddedilen bağlantı: {} (zaman aşımı)", remote.ip())),
@@ -88,7 +90,7 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
             _ = sleep_until(retry.next_dial), if dialer && link.is_none() => {
                 match dial(&addresses, &context.identity, trust, port, timing.dial_timeout).await {
                     Ok((session, address)) => {
-                        link = activate(context, &mut peer, &mut addresses, session, address, &state).await?;
+                        link = activate(context, &mut peer, &mut addresses, session, address, &state, &mut pending).await?;
                     }
                     Err(failures) => {
                         context.events.diagnostic(format!("Bağlanılamadı: {failures}"));
@@ -99,7 +101,7 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
             }
             copy = context.clipboard.local_copies.recv() => {
                 let copy = copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
-                if let Err(error) = transfer::send_local(context, &mut state, &mut link, copy).await {
+                if let Err(error) = transfer::send_local(context, &mut state, &mut link, &mut pending, copy).await {
                     disconnect(&mut context.events, &mut link, &mut retry, &error.to_string());
                 }
             }
@@ -144,7 +146,8 @@ pub async fn run(context: &mut Context, mut peer: Peer) -> anyhow::Result<Flow> 
     }
 }
 
-/// Oturumu başlatır ve saatimizi bildirir; gönderilemezse oturum kurulmamış sayılır.
+/// Oturumu başlatır, saatimizi ve kopukken yapılan kopyayı gönderir;
+/// gönderilemezse oturum kurulmamış sayılır.
 async fn activate(
     context: &mut Context,
     peer: &mut Peer,
@@ -152,11 +155,16 @@ async fn activate(
     session: Session,
     address: SocketAddr,
     state: &SyncState,
+    pending: &mut Option<Pending>,
 ) -> anyhow::Result<Option<Link>> {
     remember_address(&context.store, peer, addresses, address)?;
     let mut link = Link::start(session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone());
     if let Err(error) = link.send(Message::Clock { lamport: state.clock() }).await {
         context.events.diagnostic(format!("Saat gönderilemedi, bağlantı kapatıldı: {error}"));
+        return Ok(None);
+    }
+    if let Err(error) = transfer::send_pending(context, &mut link, pending) {
+        context.events.diagnostic(format!("Bekleyen kopya gönderilemedi, bağlantı kapatıldı: {error}"));
         return Ok(None);
     }
     let summary = summary(peer);

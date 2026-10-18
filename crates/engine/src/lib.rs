@@ -35,6 +35,8 @@ pub struct Timing {
     pub dial_timeout: Duration,
     pub min_backoff: Duration,
     pub max_backoff: Duration,
+    /// Bağlantı kopukken yapılan son kopya bu süre içinde bağlanılırsa gönderilir.
+    pub offline_copy_max_age: Duration,
 }
 
 impl Default for Timing {
@@ -46,6 +48,7 @@ impl Default for Timing {
             dial_timeout: Duration::from_secs(3),
             min_backoff: Duration::from_secs(1),
             max_backoff: Duration::from_secs(30),
+            offline_copy_max_age: Duration::from_secs(120),
         }
     }
 }
