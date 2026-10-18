@@ -31,9 +31,14 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 
 ## Durum (2026-10-18)
 
-Faz 1 kodu `main`'de; depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: v0.1.1. v0.1.2 (yeni arayüz + Developer ID imzası + noterlik) yayınlanmadı: run 39071029682'nin macOS işi noterliği 6 saat bekleyip zaman aşımıyla iptal oldu (Windows işi başarılı). Hesabın ilk iki noterlik gönderimi (2026-10-17 21:11 / 21:35 UTC) Apple'da "In Progress".
+Faz 1 kodu `main`'de; depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.2** (yeni arayüz), macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (run 39111409024, `notarize=false`). İki cihaz güncellendi, Yerel Ağ izni tuttu, sihirbazla eşleşti, Mac→Windows metin gitti (2026-10-18). Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
 
-Sıradaki: `scripts/notary-status.sh` "Accepted" gösterince `gh run rerun 39071029682 -R behcetozcann/opencontinuity` (ya da yeni `gh workflow run release.yml --ref v0.1.2`) → başarılıysa `scripts/publish-release.sh v0.1.2 --publish` → Mac'te Yerel Ağ iznini bir kez ver (imza artık sabit) → Windows'u güncelle → sihirbazla eşleştir → `docs/test-plan.md` Faz 1 tablosu (F1–F12).
+Hesabın ilk iki noterlik gönderimi (2026-10-17 21:11 / 21:35 UTC) Apple'da hâlâ "In Progress" (ilk Developer ID incelemesi). Notarize=true derleme 6 saatte zaman aşımına düşüyor; onay gelmeden yeniden deneme.
+
+Sıradaki:
+1. `scripts/notary-status.sh` → "Accepted" ise sürümü 0.1.3 yap, etiketle, `gh workflow run release.yml --ref v0.1.3` (notarize varsayılan açık) → `scripts/publish-release.sh v0.1.3 --publish` → `spctl -a -vv` "Notarized Developer ID" doğrula.
+2. `docs/test-plan.md` Faz 1 tablosu F1–F12'yi gerçek cihazda yürüt (eşleşme + tek metin gönderimi görüldü, tablo işaretlenmedi).
+3. Faz 2: görsel panosu (PNG), sonra boyut sınırlı dosya aktarımı — bkz. plan §4 V0.1.1 ve §9.
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
 
