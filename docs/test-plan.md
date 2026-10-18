@@ -60,8 +60,8 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 | # | Senaryo | Mac | Windows |
 |---|---|---|---|
 | G0 | macOS adaptörü: PNG oku, TIFF→PNG çevir, yazılan PNG geri okununca aynı hash (`oc clip-watch` + `oc clip-set-image`) | [x] 2026-10-18: PNG 4142 B f8819d90; TIFF→PNG 5124 B; yazılan geri okununca f8819d90 | — |
-| G1 | Mac ekran görüntüsü (⌘⇧⌃4) → Windows'ta Paint ve Word'e yapıştır; iki uçta hash aynı | [ ] | [ ] |
-| G2 | Windows ekran alıntısı (Win+Shift+S) → Mac'te Önizleme (Dosya → Panodan Yeni) ve Notlar'a yapıştır | [ ] | [ ] |
+| G1 | Mac ekran görüntüsü (⌘⇧⌃4) → Windows'ta Paint ve Word'e yapıştır; iki uçta hash aynı | [x] 0.1.4: 17464 B, hash af5f71c3 iki uçta aynı | [x] panoya PNG + CF_DIB yazıldı (Paint/Word ayrı denenmedi) |
+| G2 | Windows ekran alıntısı (Win+Shift+S) → Mac'te Önizleme (Dosya → Panodan Yeni) ve Notlar'a yapıştır | [x] 0.1.3: 93171 B, hash a7200232 | [x] Ekran Alıntısı Aracı panoyu 0,3 sn sonra aynı içerikle yeniden yazıyor → 2 gönderim (zararsız). Alıntı Windows'ta kendiliğinden panoya girer; Mac ⌘⇧4 dosyaya kaydeder, panoya girmez |
 | G3 | Tarayıcıda "Görseli kopyala" (Chrome/Edge/Safari) iki yönde | [ ] | [ ] |
 | G4 | Saydam PNG: Mac'te saydamlık korunur; Windows Paint'te beyaz zemin, Word'de saydam | [ ] | [ ] |
 | G5 | Büyük görsel (5K ekran görüntüsü, >5 MiB): bağlantı kopmaz, ardından metin de gider | [ ] | [ ] |
@@ -75,7 +75,7 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 |---|---|---|---|
 | D0 | macOS adaptörü: Finder kopyası okunur, yazılan 2 öğe yazan süreç kapandıktan sonra da 2 kalır (`oc clip-set-files` + JXA sayımı) | [x] 2026-10-18 (ilk sürümde 1 kalıyordu, düzeltildi) | — |
 | D1 | Tek PDF: Mac Finder'da Cmd+C → Windows masaüstünde Ctrl+V | [ ] | [ ] |
-| D2 | Gezgin'de Excel/Word dosyası Ctrl+C → Mac Finder'da Cmd+V | [ ] | [ ] |
+| D2 | Gezgin'de Excel/Word dosyası Ctrl+C → Mac Finder'da Cmd+V | [x] 0.1.4: 1 öğe 99988 B alındı, kullanıcı "çalışıyor" dedi | [x] |
 | D3 | İç içe klasör (boş alt klasör dahil) iki yönde; yapı ve içerik aynı | [ ] | [ ] |
 | D4 | Türkçe/emoji adlı dosya; Mac'te `:` içeren ad Windows'ta `_` ile gelir | [ ] | [ ] |
 | D5 | 200 MB+ dosya: "gönderiliyor/alınıyor" görünür, bu sırada metin kopyalanırsa aktarım bırakılır ve metin gider | [ ] | [ ] |
