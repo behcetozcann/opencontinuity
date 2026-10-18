@@ -5,6 +5,7 @@
 //! Ayarları'ndaki Arka Plan Öğeleri listesinde uygulama adı ve simgesi
 //! yerine çıplak "exec" görünüyordu.
 
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
@@ -13,7 +14,14 @@ use tauri::AppHandle;
 /// Girişte otomatik başlatılınca verilen argüman; o zaman pencere gizli kalır.
 pub const AUTOSTART_ARG: &str = "--autostart";
 
+/// Yalnız kullanıcı Ayarlar'dan kapatınca yazılır. Kaydın yokluğu kapatma sayılmaz:
+/// Windows'ta elle kurulum eski sürümü kaldırırken Run kaydını siler.
+const DISABLED_MARKER: &str = "autostart-disabled";
+/// Eski sürümlerin işareti; kaydın kaybolmasını "kullanıcı kapattı" sanıyordu.
+const OLD_MARKER: &str = "autostart-initialized";
+
 static LAUNCHER: OnceLock<Result<AutoLaunch, String>> = OnceLock::new();
+static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 fn launcher(app: &AppHandle) -> Result<&'static AutoLaunch, String> {
     LAUNCHER.get_or_init(|| build(app)).as_ref().map_err(Clone::clone)
@@ -34,8 +42,41 @@ pub fn is_enabled(app: &AppHandle) -> Result<bool, String> {
     launcher(app)?.is_enabled().map_err(|error| error.to_string())
 }
 
-pub fn set_enabled(app: &AppHandle, enabled: bool) -> Result<(), String> {
+/// Açılışta: kullanıcı kapatmadıysa kayıt her seferinde yeniden yazılır
+/// (silinmiş ya da eski yolu gösteriyor olabilir).
+pub fn sync(app: &AppHandle, config_dir: &Path) {
+    let _ = CONFIG_DIR.set(config_dir.to_path_buf());
+    let _ = std::fs::remove_file(config_dir.join(OLD_MARKER));
+    // Geliştirme derlemesi girişe kaydedilmez; kayıt target/ altındaki binary'yi gösterirdi.
+    if cfg!(debug_assertions) {
+        return;
+    }
+    if config_dir.join(DISABLED_MARKER).exists() {
+        crate::diagnostics::write("Girişte başlatma: kullanıcı kapattı.");
+        return;
+    }
+    let was_enabled = is_enabled(app).unwrap_or(false);
+    match set_enabled(app, true) {
+        Ok(()) if was_enabled => crate::diagnostics::write("Girişte başlatma: açık."),
+        Ok(()) => crate::diagnostics::write("Girişte başlatma: kayıt yoktu, yeniden yazıldı."),
+        Err(error) => crate::diagnostics::write(&format!("Girişte başlatma açılamadı: {error}")),
+    }
+}
+
+pub fn set_by_user(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    set_enabled(app, enabled)?;
+    let Some(dir) = CONFIG_DIR.get() else { return Ok(()) };
+    let marker = dir.join(DISABLED_MARKER);
+    let result = if enabled { std::fs::remove_file(marker).or_else(ignore_missing) } else { std::fs::write(marker, b"") };
+    result.map_err(|error| error.to_string())
+}
+
+fn set_enabled(app: &AppHandle, enabled: bool) -> Result<(), String> {
     let launcher = launcher(app)?;
     let result = if enabled { launcher.enable() } else { launcher.disable() };
     result.map_err(|error| error.to_string())
+}
+
+fn ignore_missing(error: std::io::Error) -> std::io::Result<()> {
+    if error.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(error) }
 }

@@ -44,7 +44,7 @@ pub fn autostart_enabled(app: AppHandle) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
-    autostart::set_enabled(&app, enabled)
+    autostart::set_by_user(&app, enabled)
 }
 
 #[tauri::command]

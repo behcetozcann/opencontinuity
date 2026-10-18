@@ -16,9 +16,6 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-/// İlk açılışta girişte başlatmayı bir kez açtığımızı hatırlar; kullanıcı kapatırsa saygı duyulur.
-const AUTOSTART_MARKER: &str = "autostart-initialized";
-
 #[derive(Debug, Clone, Serialize)]
 pub struct Transfer {
     /// "sent" | "received" | "too_large" (sınırı aştığı için gönderilmedi)
@@ -122,8 +119,8 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let config = EngineConfig::system()?;
             let unpaired = PeerStore::new(&config.config_dir).load()?.is_none();
-            sync_autostart(app.handle(), &config.config_dir);
             diagnostics::open(&config.config_dir);
+            autostart::sync(app.handle(), &config.config_dir);
             let (engine, handle, events) = Engine::new(config, ClipboardSource::System);
             app.manage(AppState { handle: Mutex::new(handle), view: Mutex::new(View::default()) });
             app.manage(updater::PendingUpdate::default());
@@ -221,24 +218,4 @@ pub fn update_view(app: &AppHandle, change: impl FnOnce(&mut View)) {
     };
     let _ = app.emit("view", &view);
     tray::refresh(app, &view);
-}
-
-fn sync_autostart(app: &AppHandle, config_dir: &std::path::Path) {
-    let marker = config_dir.join(AUTOSTART_MARKER);
-    // Geliştirme derlemesi girişe kaydedilmez; kayıt target/ altındaki binary'yi gösterirdi.
-    if cfg!(debug_assertions) {
-        return;
-    }
-    // Açıksa yeniden yazılır: eski kayıtlarda argüman ve uygulama kimliği eksikti.
-    let refresh = marker.exists() && autostart::is_enabled(app).unwrap_or(false);
-    if marker.exists() && !refresh {
-        return;
-    }
-    match autostart::set_enabled(app, true) {
-        Ok(()) => {
-            let _ = std::fs::create_dir_all(config_dir);
-            let _ = std::fs::write(marker, b"");
-        }
-        Err(error) => diagnostics::write(&format!("Girişte başlatma açılamadı: {error}")),
-    }
 }
