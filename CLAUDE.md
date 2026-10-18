@@ -31,7 +31,7 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 
 ## Durum (2026-10-18, oturum sonu)
 
-Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.7** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (`notarize=false`; kullanıcı Apple'ı beklememeyi seçti). İki cihaz güncelleyiciyle 0.1.4'te, bağlı. Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
+Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.7** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ve 0.1.7'den beri **noterlikli** (DMG içindeki uygulama `spctl`: accepted, Notarized Developer ID; staple doğrulandı).
 
 Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 - Görsel panosu (0.1.3, v4): PNG, ≤ 32 MiB, 256 KiB parçalar. macOS `public.png`/TIFF→PNG; Windows `PNG` biçimi (IEND'e göre kırpılır) / CF_DIB→PNG, yazarken PNG + CF_DIB. Metin + görsel birlikteyse metin gider.
@@ -43,7 +43,7 @@ Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3
 
 Sıradaki:
 1. **0.1.5 gerçek cihaz onayı bekliyor:** (a) Windows "Animasyon efektleri" kapalıydı (kullanıcı doğruladı); `prefers-reduced-motion`'da artık her şey durmuyor, yalnız yer değiştiren hareketler solmaya dönüyor (`components.css` sonu). (b) Kopukken yapılan son kopya 2 dk içinde bağlanılırsa gönderiliyor (`transfer::Pending`, `Timing::offline_copy_max_age`).
-2. `scripts/notary-status.sh` → "Accepted" ise noterlikli sürüm (`notarize` varsayılan açık) + `spctl -a -vv` doğrula. 2026-10-18 öğlen hâlâ "In Progress".
+2. (Tamam) Noterlik: 0.1.7 noterlikli yayınlandı, Gatekeeper kabul ediyor.
 3. Faz 1 testleri tamam (F1, F5, F9 Çık, F10 kullanıcı 2026-10-18 toplu "sorunsuz" dedi). Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 4. Faz 2 devamı (plan §9): çoklu cihaz, Linux; isteğe bağlı "dosya paylaşımı" anahtarı (Gezgin'de yerel taşıma için yapılan her kopya da karşıya gidiyor).
 
