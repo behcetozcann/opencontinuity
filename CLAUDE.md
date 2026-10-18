@@ -37,7 +37,7 @@ Hesabın ilk iki noterlik gönderimi (2026-10-17 21:11 / 21:35 UTC) Apple'da hâ
 
 Sıradaki:
 1. `scripts/notary-status.sh` → "Accepted" ise sürümü 0.1.3 yap, etiketle, `gh workflow run release.yml --ref v0.1.3` (notarize varsayılan açık) → `scripts/publish-release.sh v0.1.3 --publish` → `spctl -a -vv` "Notarized Developer ID" doğrula.
-2. `docs/test-plan.md` Faz 1 tablosu F1–F12'yi gerçek cihazda yürüt (eşleşme + tek metin gönderimi görüldü, tablo işaretlenmedi).
+2. Faz 1 testleri (2026-10-18): F2, F3, F6–F9, F11, F12 geçti (`docs/test-plan.md`). Kalan: F1, F4 (artık uygulanamaz, Faz 0 eşleşmesi yok), F5 (kaldır → yeniden eşleştir), F10 (yeniden başlatınca kendiliğinden başlama), F9'da Çık. Açık iki bulgu (test-plan "Bulgular"): Windows Mac'in uykusunu ~4 dk fark etmedi (yeniden üretilmedi; önce yalnız kapak kapat/aç testi + Windows oc.log); kopukken yapılan kopya bağlanınca gönderilmiyor (kullanıcıya 'gönderilsin mi' soruldu, cevap yok).
 3. Faz 2: görsel panosu (PNG), sonra boyut sınırlı dosya aktarımı — bkz. plan §4 V0.1.1 ve §9.
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
