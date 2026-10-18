@@ -31,7 +31,7 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 
 ## Durum (2026-10-18, oturum sonu)
 
-Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.6** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (`notarize=false`; kullanıcı Apple'ı beklememeyi seçti). İki cihaz güncelleyiciyle 0.1.4'te, bağlı. Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
+Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.7** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (`notarize=false`; kullanıcı Apple'ı beklememeyi seçti). İki cihaz güncelleyiciyle 0.1.4'te, bağlı. Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
 
 Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 - Görsel panosu (0.1.3, v4): PNG, ≤ 32 MiB, 256 KiB parçalar. macOS `public.png`/TIFF→PNG; Windows `PNG` biçimi (IEND'e göre kırpılır) / CF_DIB→PNG, yazarken PNG + CF_DIB. Metin + görsel birlikteyse metin gider.
@@ -52,7 +52,7 @@ Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket i�
 ## Yayın akışı
 
 1. `Cargo.toml` `[workspace.package] version` artır, commit, `git tag -a vX.Y.Z`, push.
-2. `gh workflow run release.yml -R behcetozcann/opencontinuity --ref vX.Y.Z -f notarize=false` (etiket push'u şu an tetiklemiyor). `notarize` varsayılanı açık: unutulursa iş Apple kuyruğunda saatlerce bekler (0.1.5'te oldu, iptal edildi). Noterlik `notary-status.sh` "Accepted" görene kadar kapalı.
+2. `gh workflow run release.yml -R behcetozcann/opencontinuity --ref vX.Y.Z` (etiket push'u şu an tetiklemiyor). Noterlik varsayılan açık (0.1.7'den beri; Apple 2026-10-18 akşamı onayladı). Apple kuyruğu takılırsa işi iptal edip `-f notarize=false` ile yeniden başlat (0.1.5'te iş saatlerce bekledi).
 3. Derleme bitince `scripts/publish-release.sh vX.Y.Z --publish`: çıktıları indirir, `latest.json` üretir, Release'e yükler. Kurulu uygulamalar 6 saatte bir (ya da Ayarlar → Denetle) bulur.
 4. Noterlik durumu: `scripts/notary-status.sh` (Apple'da web sayfası yok).
 

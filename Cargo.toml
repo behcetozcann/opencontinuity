@@ -3,7 +3,7 @@ resolver = "3"
 members = ["apps/cli", "apps/desktop/src-tauri", "crates/clipboard", "crates/core", "crates/discovery", "crates/engine", "crates/pairing", "crates/protocol", "crates/transport"]
 
 [workspace.package]
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 license = "PolyForm-Noncommercial-1.0.0"
 
