@@ -45,6 +45,8 @@ pub struct Node {
     /// Gelen dosyaların kaydedildiği klasör.
     pub files: tempfile::TempDir,
     task: tokio::task::JoinHandle<()>,
+    /// Okunan son durum; `wait_current` olay gelmese de buradan başlar.
+    last_state: Option<Snapshot>,
 }
 
 impl Node {
@@ -72,7 +74,7 @@ impl Node {
         };
         let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_copies, writes }));
         let task = tokio::spawn(async move { engine.run().await.unwrap() });
-        Self { handle, events, copy, written, port, dir, files, task }
+        Self { handle, events, copy, written, port, dir, files, task, last_state: None }
     }
 
     /// Motoru kapatır ve bitmesini bekler; aynı dizin ve portla yeniden
@@ -89,6 +91,9 @@ impl Node {
         timeout(WAIT, async {
             loop {
                 let event = self.events.recv().await.expect("motor durdu");
+                if let Event::State(snapshot) = &event {
+                    self.last_state = Some(snapshot.clone());
+                }
                 if predicate(&event) {
                     return event;
                 }
@@ -105,9 +110,27 @@ impl Node {
         }
     }
 
-    /// En az `count` eşe bağlı olana kadar bekler.
-    pub async fn wait_connected_to(&mut self, count: usize) {
-        self.wait_state(|snapshot| snapshot.connected_count() >= count).await;
+    /// Kuyruktaki eski durumlara değil, en son duruma bakar: yük altında bir uç
+    /// el sıkışmayı zaman aşımıyla bırakırken öteki tamamlayabilir ve kısa süre
+    /// "bağlı" görünüp kopar; eski bir "bağlı/kopuk" durumu yanlış eşleşmesin.
+    pub async fn wait_current(&mut self, mut predicate: impl FnMut(&Snapshot) -> bool) {
+        timeout(WAIT, async {
+            loop {
+                while let Ok(event) = self.events.try_recv() {
+                    if let Event::State(snapshot) = event {
+                        self.last_state = Some(snapshot);
+                    }
+                }
+                if self.last_state.as_ref().is_some_and(&mut predicate) {
+                    return;
+                }
+                if let Event::State(snapshot) = self.events.recv().await.expect("motor durdu") {
+                    self.last_state = Some(snapshot);
+                }
+            }
+        })
+        .await
+        .expect("beklenen durum gelmedi")
     }
 
     pub async fn wait_connected(&mut self) {

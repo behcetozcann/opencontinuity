@@ -12,9 +12,9 @@ async fn group_of_three() -> (Node, Node, Node) {
     let mut linux = Node::start("linux");
     pair(&mut windows, &mut linux).await;
     mac.wait_for(|event| matches!(event, Event::PeerAdded { peer, via } if peer == "linux" && via == "windows")).await;
-    mac.wait_connected_to(2).await;
-    windows.wait_connected_to(2).await;
-    linux.wait_connected_to(2).await;
+    for node in [&mut mac, &mut windows, &mut linux] {
+        node.wait_current(|snapshot| snapshot.connected_count() == 2).await;
+    }
     (mac, windows, linux)
 }
 
@@ -41,7 +41,7 @@ async fn third_device_joins_through_any_member_and_all_sync() {
 async fn offline_member_gets_copy_on_return_while_others_keep_syncing() {
     let (mut mac, windows, linux) = group_of_three().await;
     let (linux_dir, linux_port) = linux.stop().await;
-    mac.wait_for(|event| matches!(event, Event::Disconnected { peer, .. } if peer == "linux")).await;
+    mac.wait_current(|snapshot| snapshot.connected_count() == 1).await;
 
     mac.copy.send(text("linux yokken")).await.unwrap();
     assert_eq!(windows.next_written().await, text("linux yokken"));

@@ -73,9 +73,11 @@ async fn pause_blocks_sending_and_applying() {
 /// yapılan kopya, bağlanınca gönderilmiyordu.
 #[tokio::test]
 async fn copy_made_while_disconnected_is_sent_on_reconnect() {
-    let (mut mac, windows) = paired_and_connected().await;
+    let (mut mac, mut windows) = paired_and_connected().await;
+    mac.wait_current(|snapshot| snapshot.connected_count() == 1).await;
+    windows.wait_current(|snapshot| snapshot.connected_count() == 1).await;
     let (windows_dir, windows_port) = windows.stop().await;
-    mac.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
+    mac.wait_current(|snapshot| snapshot.connected_count() == 0).await;
 
     mac.copy.send(text("kopukken")).await.unwrap();
     mac.wait_for(|event| matches!(event, Event::Skipped { reason } if reason.contains("gönderilecek"))).await;
@@ -89,9 +91,10 @@ async fn stale_offline_copy_is_not_sent() {
     let mut mac = Node::start_at("mac", tempfile::tempdir().unwrap(), free_port(), expiring);
     let mut windows = Node::start("windows");
     pair(&mut mac, &mut windows).await;
-    windows.wait_connected().await;
+    mac.wait_current(|snapshot| snapshot.connected_count() == 1).await;
+    windows.wait_current(|snapshot| snapshot.connected_count() == 1).await;
     let (windows_dir, windows_port) = windows.stop().await;
-    mac.wait_for(|event| matches!(event, Event::Disconnected { .. })).await;
+    mac.wait_current(|snapshot| snapshot.connected_count() == 0).await;
 
     mac.copy.send(text("eski")).await.unwrap();
     let mut windows = Node::start_at("windows", windows_dir, windows_port, fast_timing());
