@@ -32,6 +32,16 @@ pub fn set(text: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn set_image(path: &std::path::Path) -> anyhow::Result<()> {
+    let png = std::fs::read(path)?;
+    if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+        anyhow::bail!("{} bir PNG dosyası değil", path.display());
+    }
+    oc_clipboard::system()?.write_png(&png)?;
+    println!("Panoya yazıldı: {}", describe(&Content::Image(png)));
+    Ok(())
+}
+
 /// İçeriği asla göstermez: yalnız uzunluk ve hash öneki.
 fn describe(content: &Content) -> String {
     match content {
@@ -44,7 +54,8 @@ fn describe(content: &Content) -> String {
                 &hex::encode(digest)[..8]
             )
         }
+        Content::Image(png) => format!("görsel (PNG), {} bayt, hash {}", png.len(), &hex::encode(Sha256::digest(png))[..8]),
         Content::Concealed => "gizli/geçici işaretli (gönderilmez)".to_owned(),
-        Content::NoText => "düz metin yok".to_owned(),
+        Content::Unsupported => "desteklenen içerik yok".to_owned(),
     }
 }

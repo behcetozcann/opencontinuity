@@ -3,7 +3,9 @@
 use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
-use oc_engine::{ClipboardPort, ClipboardSource, Command, Engine, EngineConfig, Event, Handle, PairingStage, Snapshot, Timing};
+use oc_engine::{
+    ClipboardPort, ClipboardSource, Command, Engine, EngineConfig, Event, Handle, PairingStage, Payload, Snapshot, Timing,
+};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
@@ -20,6 +22,10 @@ pub fn fast_timing() -> Timing {
     }
 }
 
+pub fn text(value: &str) -> Payload {
+    Payload::Text(value.to_owned())
+}
+
 pub fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
 }
@@ -28,9 +34,9 @@ pub struct Node {
     pub handle: Handle,
     pub events: mpsc::UnboundedReceiver<Event>,
     /// Sahte panoda "kullanıcı kopyaladı".
-    pub copy: mpsc::Sender<String>,
+    pub copy: mpsc::Sender<Payload>,
     /// Motorun panoya yazdıkları.
-    pub written: std_mpsc::Receiver<String>,
+    pub written: std_mpsc::Receiver<Payload>,
     pub port: u16,
     pub dir: tempfile::TempDir,
 }
@@ -43,7 +49,7 @@ impl Node {
 
     pub fn start_in(name: &str, dir: tempfile::TempDir) -> Self {
         let port = free_port();
-        let (copy, local_texts) = mpsc::channel(8);
+        let (copy, local_copies) = mpsc::channel(8);
         let (writes, written) = std_mpsc::channel();
         let config = EngineConfig {
             config_dir: dir.path().to_path_buf(),
@@ -52,7 +58,7 @@ impl Node {
             discovery: false,
             timing: fast_timing(),
         };
-        let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_texts, writes }));
+        let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_copies, writes }));
         tokio::spawn(async move { engine.run().await.unwrap() });
         Self { handle, events, copy, written, port, dir }
     }
@@ -82,8 +88,8 @@ impl Node {
         self.wait_state(|snapshot| snapshot.connected_ip.is_some()).await;
     }
 
-    /// Panoya yazılan sonraki metin.
-    pub async fn next_written(&self) -> String {
+    /// Panoya yazılan sonraki içerik.
+    pub async fn next_written(&self) -> Payload {
         let deadline = std::time::Instant::now() + WAIT;
         loop {
             if let Ok(text) = self.written.try_recv() {

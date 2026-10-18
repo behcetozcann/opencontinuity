@@ -52,8 +52,11 @@ pub fn record(event: &Event) {
                 Some(oc_engine::PairingStage::WaitingPeer { .. }) => "eş onayı bekleniyor",
             }
         ),
-        Event::Sent { bytes, lamport } => format!("Gönderildi: {bytes} bayt (lamport {lamport})"),
-        Event::Received { bytes, lamport } => format!("Alındı: {bytes} bayt (lamport {lamport})"),
+        Event::Sending { content, bytes } => format!("Gönderiliyor: {content:?}, {bytes} bayt"),
+        Event::Receiving { content, bytes } => format!("Alınıyor: {content:?}, {bytes} bayt"),
+        Event::TooLarge { content, bytes, limit } => format!("Çok büyük, gönderilmedi: {content:?}, {bytes} bayt (sınır {limit})"),
+        Event::Sent { content, bytes, lamport } => format!("Gönderildi: {content:?}, {bytes} bayt (lamport {lamport})"),
+        Event::Received { content, bytes, lamport } => format!("Alındı: {content:?}, {bytes} bayt (lamport {lamport})"),
         Event::Skipped { reason } => reason.clone(),
         Event::Disconnected { reason } => format!("Bağlantı koptu: {reason}"),
         Event::Paired { peer } => format!("Eşleşti: {peer}"),

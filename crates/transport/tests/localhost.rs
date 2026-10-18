@@ -1,5 +1,5 @@
 use oc_pairing::{Identity, sas_code};
-use oc_protocol::{ClipEvent, Message};
+use oc_protocol::{ClipEvent, Message, Payload};
 use oc_transport::{Session, Trust, accept, connect};
 use tokio::net::TcpListener;
 
@@ -62,7 +62,7 @@ async fn pinned_peers_connect_and_exchange_text() {
     assert_eq!(client.peer_listen_port, SERVER_PORT);
 
     let text = "Türkçe ğüşıöç 🇹🇷\r\nikinci satır".to_owned();
-    let message = Message::Clip(ClipEvent { event_id: [1; 16], lamport: 1, text });
+    let message = Message::Clip(ClipEvent { event_id: [1; 16], lamport: 1, payload: Payload::Text(text) });
     client.send(&message).await.unwrap();
     assert_eq!(server.recv().await.unwrap(), message);
 }

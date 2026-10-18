@@ -22,6 +22,7 @@ use oc_pairing::{Identity, PeerStore};
 use tokio::sync::mpsc;
 
 pub use events::{Event, PairingStage, PeerSummary, Snapshot};
+pub use oc_protocol::{ContentKind, Payload};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Timing {
@@ -70,10 +71,10 @@ impl EngineConfig {
 
 /// Panoyla konuşan kanallar; testler sahte pano için kendisi kurar.
 pub struct ClipboardPort {
-    /// Yerelde kopyalanan metinler.
-    pub local_texts: mpsc::Receiver<String>,
-    /// Panoya yazılacak uzak metinler.
-    pub writes: std_mpsc::Sender<String>,
+    /// Yerelde kopyalanan metin ve görseller.
+    pub local_copies: mpsc::Receiver<Payload>,
+    /// Panoya yazılacak uzak içerik.
+    pub writes: std_mpsc::Sender<Payload>,
 }
 
 pub enum ClipboardSource {
@@ -186,8 +187,8 @@ async fn idle(context: &mut Context) -> anyhow::Result<Flow> {
                 Some(_) => {}
             },
             // Eş yokken kopyalar okunup atılır; kanal dolup pano iş parçacığı tıkanmasın.
-            text = context.clipboard.local_texts.recv() => {
-                text.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
+            copy = context.clipboard.local_copies.recv() => {
+                copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
             }
         }
     }

@@ -1,4 +1,4 @@
-# Test planı — Faz 0 ve Faz 1
+# Test planı — Faz 0, Faz 1 ve Faz 2
 
 Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Gerçek cihaz testi yapılmadan madde işaretlenmez.
 
@@ -12,6 +12,8 @@ Durum işaretleri: `[ ]` yapılmadı, `[x]` geçti, `[!]` kaldı (not ile). Ger�
 - [x] Pairing: iki uçta SAS eşit; farklı exporter farklı SAS.
 - [x] Transport (localhost): eşleşmiş iki örnek bağlanır; eşleşmemiş sertifika iki yönde reddedilir; eşleştirme ve senkron modundaki uçlar oturum kuramaz (v3).
 - [x] Engine (iki motor, sahte pano, localhost): eşleştirme + iki yönlü aktarım + yankı döngüsü yok; duraklatmada gönderim/uygulama yok ve devamdaki ilk kopya reddedilmez; `unpair` sonrası eski eş reddedilir ve yeniden eşleştirme çalışır; kod reddinde iki uçta da kayıt yok.
+- [x] Görsel (v4): 10 MiB'lık görsel parçalanıp birleşir; başlangıçsız/iç içe/fazla parça ve PNG imzasız içerik reddedilir; çerçeve sınırını aşan görsel iki motor arasında gider, yankısı dönmez, bağlantı kopmaz; aynı baytlı metin ve görsel yankı sayılmaz.
+- [x] Pano (Windows dönüşümü, her platformda): PNG → CF_DIB → PNG piksel piksel aynı; saydam piksel DIB'de beyaz; PNG uzunluğu sondaki dolguyu atar.
 - [x] Heartbeat: susan eş zaman aşımıyla kopuk sayılır (testte kısaltılmış sürelerle: 600 ms; gerçek değer 15 sn).
 
 ## Gerçek cihaz (Mac ↔ Windows, aynı LAN)
@@ -49,6 +51,22 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 | F10 | Oturum kapat/aç (veya yeniden başlat) sonrası kendiliğinden başlar ve bağlanır | [ ] | [ ] |
 | F11 | Uyku/uyanma ve Wi-Fi kapat/aç sonrası toparlanır | [x] kapak 12:10:28–12:14:09; uyanınca kopma hemen algılandı, ~31 sn sonra kendiliğinden bağlandı (Windows Wi-Fi de kapalıydı, iki olay örtüştü). Kopukken yapılan kopya bağlanınca gönderilmedi, tekrar kopyalamak gerekti | [x] Wi-Fi kapat/aç sonrası kendiliğinden bağlandı |
 | F12 | İkinci kez açmak yeni örnek başlatmaz, mevcut pencereyi öne getirir | [x] `open` sonrası tek süreç, pencere ekranda | [x] mevcut pencere geldi |
+
+## Gerçek cihaz — Faz 2 görsel panosu (v4)
+
+İki tarafta da v4 (`oc run` ya da 0.1.3+) gerekir; v3 ile bağlanmaz.
+
+| # | Senaryo | Mac | Windows |
+|---|---|---|---|
+| G0 | macOS adaptörü: PNG oku, TIFF→PNG çevir, yazılan PNG geri okununca aynı hash (`oc clip-watch` + `oc clip-set-image`) | [x] 2026-10-18: PNG 4142 B f8819d90; TIFF→PNG 5124 B; yazılan geri okununca f8819d90 | — |
+| G1 | Mac ekran görüntüsü (⌘⇧⌃4) → Windows'ta Paint ve Word'e yapıştır; iki uçta hash aynı | [ ] | [ ] |
+| G2 | Windows ekran alıntısı (Win+Shift+S) → Mac'te Önizleme (Dosya → Panodan Yeni) ve Notlar'a yapıştır | [ ] | [ ] |
+| G3 | Tarayıcıda "Görseli kopyala" (Chrome/Edge/Safari) iki yönde | [ ] | [ ] |
+| G4 | Saydam PNG: Mac'te saydamlık korunur; Windows Paint'te beyaz zemin, Word'de saydam | [ ] | [ ] |
+| G5 | Büyük görsel (5K ekran görüntüsü, >5 MiB): bağlantı kopmaz, ardından metin de gider | [ ] | [ ] |
+| G6 | Excel hücreleri / Word metni kopyala → metin gider, görsel gitmez | [ ] | [ ] |
+| G7 | Alınan görselin yankısı geri gönderilmez (karşı tarafta "Alındı" sonrası "Gönderildi" yok) | [ ] | [ ] |
+| G8 | Finder / Gezgin'de dosya kopyala → dosya adı metni gider (dosya aktarımı yok) | [ ] | [ ] |
 
 ## Bulgular
 

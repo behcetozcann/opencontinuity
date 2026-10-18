@@ -14,12 +14,15 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 use windows::core::{PWSTR, w};
 
-use crate::{Clipboard, Content};
+use crate::{Clipboard, Content, dib, png_length};
 
+const CF_DIB: u32 = 8;
 const CF_UNICODETEXT: u32 = 13;
 const OPEN_RETRIES: u32 = 10;
 
 pub struct WindowsClipboard {
+    /// Tarayıcılar, Office ve ekran alıntısı aracı bu adla PNG koyar.
+    png_format: u32,
     exclude_format: u32,
     history_format: u32,
     cloud_format: u32,
@@ -28,17 +31,18 @@ pub struct WindowsClipboard {
 impl WindowsClipboard {
     pub fn new() -> anyhow::Result<Self> {
         // SAFETY: sabit, null ile biten geniş dizgeler.
-        let (exclude_format, history_format, cloud_format) = unsafe {
+        let (png_format, exclude_format, history_format, cloud_format) = unsafe {
             (
+                RegisterClipboardFormatW(w!("PNG")),
                 RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing")),
                 RegisterClipboardFormatW(w!("CanIncludeInClipboardHistory")),
                 RegisterClipboardFormatW(w!("CanUploadToCloudClipboard")),
             )
         };
-        if exclude_format == 0 || history_format == 0 || cloud_format == 0 {
+        if png_format == 0 || exclude_format == 0 || history_format == 0 || cloud_format == 0 {
             anyhow::bail!("pano biçimleri kaydedilemedi");
         }
-        Ok(Self { exclude_format, history_format, cloud_format })
+        Ok(Self { png_format, exclude_format, history_format, cloud_format })
     }
 
     /// Pano açıkken çağrılmalı.
@@ -58,46 +62,55 @@ impl Clipboard for WindowsClipboard {
     }
 
     fn read(&self) -> anyhow::Result<Content> {
-        let _guard = OpenGuard::open()?;
-        // SAFETY: pano bu iş parçacığında açık; tutamaçlar kilitli okunuyor.
-        unsafe {
-            if self.is_sensitive() {
-                return Ok(Content::Concealed);
+        // Pano yalnız baytlar kopyalanırken açık tutulur; DIB→PNG dönüşümü kapandıktan sonra.
+        let (text, image) = {
+            let _guard = OpenGuard::open()?;
+            // SAFETY: pano bu iş parçacığında açık.
+            unsafe {
+                if self.is_sensitive() {
+                    return Ok(Content::Concealed);
+                }
+                let text = read_global(CF_UNICODETEXT).map(|bytes| utf16_until_nul(&bytes)).transpose()?;
+                if let Some(text) = text.as_ref().filter(|text| !text.is_empty()) {
+                    return Ok(Content::Text(text.clone()));
+                }
+                let png = read_global(self.png_format).and_then(|bytes| png_length(&bytes).map(|length| bytes[..length].to_vec()));
+                let image = match png {
+                    Some(png) => Some(Ok(png)),
+                    None => read_global(CF_DIB).map(Err),
+                };
+                (text, image)
             }
-            if IsClipboardFormatAvailable(CF_UNICODETEXT).is_err() {
-                return Ok(Content::NoText);
-            }
-            let handle = GetClipboardData(CF_UNICODETEXT)?;
-            let global = HGLOBAL(handle.0);
-            let pointer = GlobalLock(global) as *const u16;
-            if pointer.is_null() {
-                anyhow::bail!("pano verisi kilitlenemedi");
-            }
-            let max_units = GlobalSize(global) / 2;
-            let units = std::slice::from_raw_parts(pointer, max_units);
-            let length = units.iter().position(|&unit| unit == 0).unwrap_or(max_units);
-            let text = String::from_utf16(&units[..length]);
-            let _ = GlobalUnlock(global);
-            Ok(Content::Text(text?))
-        }
+        };
+        Ok(match (image, text) {
+            (Some(Ok(png)), _) => Content::Image(png),
+            (Some(Err(dib_bytes)), _) => Content::Image(dib::dib_to_png(&dib_bytes)?),
+            (None, Some(empty)) => Content::Text(empty),
+            (None, None) => Content::Unsupported,
+        })
     }
 
     fn write_text(&self, text: &str) -> anyhow::Result<()> {
-        let mut units: Vec<u16> = text.encode_utf16().collect();
-        units.push(0);
+        let bytes: Vec<u8> = text.encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
         let _guard = OpenGuard::open()?;
-        // SAFETY: bellek units.len() kadar ayrılır; SetClipboardData başarılı
-        // olursa sahiplik sisteme geçer.
+        // SAFETY: pano bu iş parçacığında açık.
         unsafe {
             EmptyClipboard()?;
-            let global = GlobalAlloc(GMEM_MOVEABLE, units.len() * 2)?;
-            let pointer = GlobalLock(global) as *mut u16;
-            if pointer.is_null() {
-                anyhow::bail!("pano belleği kilitlenemedi");
+            set_global(CF_UNICODETEXT, &bytes)
+        }
+    }
+
+    /// PNG'yi bilmeyen uygulamalar (Paint vb.) için CF_DIB de konur.
+    fn write_png(&self, png: &[u8]) -> anyhow::Result<()> {
+        let dib = dib::png_to_dib(png);
+        let _guard = OpenGuard::open()?;
+        // SAFETY: pano bu iş parçacığında açık.
+        unsafe {
+            EmptyClipboard()?;
+            set_global(self.png_format, png)?;
+            if let Ok(dib) = dib {
+                set_global(CF_DIB, &dib)?;
             }
-            std::ptr::copy_nonoverlapping(units.as_ptr(), pointer, units.len());
-            let _ = GlobalUnlock(global);
-            SetClipboardData(CF_UNICODETEXT, Some(HANDLE(global.0)))?;
         }
         Ok(())
     }
@@ -162,6 +175,43 @@ fn format_name(format: u32) -> String {
     // SAFETY: tampon boyutu fonksiyona dilim olarak verilir.
     let length = unsafe { GetClipboardFormatNameW(format, &mut buffer) };
     if length > 0 { String::from_utf16_lossy(&buffer[..length as usize]) } else { format!("#{format}") }
+}
+
+fn utf16_until_nul(bytes: &[u8]) -> anyhow::Result<String> {
+    let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
+    let length = units.iter().position(|&unit| unit == 0).unwrap_or(units.len());
+    Ok(String::from_utf16(&units[..length])?)
+}
+
+/// Pano açıkken çağrılmalı. Biçim yoksa ya da okunamazsa `None`. Boyut
+/// yuvarlanmış olabilir; gerçek uzunluğu biçimin kendisi belirler.
+unsafe fn read_global(format: u32) -> Option<Vec<u8>> {
+    unsafe {
+        IsClipboardFormatAvailable(format).ok()?;
+        let global = HGLOBAL(GetClipboardData(format).ok()?.0);
+        let pointer = GlobalLock(global) as *const u8;
+        if pointer.is_null() {
+            return None;
+        }
+        let bytes = std::slice::from_raw_parts(pointer, GlobalSize(global)).to_vec();
+        let _ = GlobalUnlock(global);
+        Some(bytes)
+    }
+}
+
+/// Pano açık ve boşaltılmışken çağrılmalı; başarılıysa belleğin sahipliği sisteme geçer.
+unsafe fn set_global(format: u32, bytes: &[u8]) -> anyhow::Result<()> {
+    unsafe {
+        let global = GlobalAlloc(GMEM_MOVEABLE, bytes.len())?;
+        let pointer = GlobalLock(global) as *mut u8;
+        if pointer.is_null() {
+            anyhow::bail!("pano belleği kilitlenemedi");
+        }
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
+        let _ = GlobalUnlock(global);
+        SetClipboardData(format, Some(HANDLE(global.0)))?;
+    }
+    Ok(())
 }
 
 /// Pano açıkken çağrılmalı. Biçim yoksa `None`.

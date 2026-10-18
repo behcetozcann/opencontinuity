@@ -36,15 +36,17 @@ eşten Clip ─► core: event_id görüldü mü? ── evet ─► at
 
 ## Pano adaptörleri
 
-- **macOS:** `NSPasteboard.generalPasteboard`; `changeCount` 250 ms aralıkla okunur, değişince `public.utf8-plain-text` alınır. `org.nspasteboard.ConcealedType` veya `org.nspasteboard.TransientType` tipi varsa içerik okunmaz.
-- **Windows:** `GetClipboardSequenceNumber` 250 ms aralıkla okunur (PoC'de mesaj penceresi gerektirmediği için `AddClipboardFormatListener` yerine); değişince `CF_UNICODETEXT` okunur. `ExcludeClipboardContentFromMonitorProcessing` biçimi varsa ya da `CanIncludeInClipboardHistory` / `CanUploadToCloudClipboard` = 0 ise içerik okunmaz.
+- **macOS:** `NSPasteboard.generalPasteboard`; `changeCount` 250 ms aralıkla okunur, değişince `public.utf8-plain-text` alınır; metin yoksa (ya da boşsa) `public.png`, o da yoksa `public.tiff` okunup `NSBitmapImageRep` ile PNG'ye çevrilir. Uzak görsel `public.png` olarak yazılır. `org.nspasteboard.ConcealedType` veya `org.nspasteboard.TransientType` tipi varsa içerik okunmaz.
+- **Windows:** `GetClipboardSequenceNumber` 250 ms aralıkla okunur (PoC'de mesaj penceresi gerektirmediği için `AddClipboardFormatListener` yerine); değişince `CF_UNICODETEXT`, yoksa kayıtlı `PNG` biçimi (uzunluk IEND'e göre kırpılır; pano belleği yuvarlanmış boyutla döner), o da yoksa `CF_DIB` okunup PNG'ye çevrilir. Pano yalnız baytlar kopyalanırken açık tutulur. Uzak görsel `PNG` + `CF_DIB` (32 bit, saydamlık beyaza karıştırılmış) olarak yazılır. `ExcludeClipboardContentFromMonitorProcessing` biçimi varsa ya da `CanIncludeInClipboardHistory` / `CanUploadToCloudClipboard` = 0 ise içerik okunmaz.
+- **Metin ve görsel birlikteyse metin gider:** Office/Excel kopyaları metnin görüntüsünü de koyar; kullanıcının beklediği metindir.
+- Görsel yankısı metindeki gibi hash'le bastırılır; hash türü de içerir (aynı baytlı metin ve görsel ayrı sayılır). Yankı ancak yazılan PNG baytları aynen geri okunursa tutar: iki adaptör de kendi yazdığı PNG'yi önce okur.
 
 ## Bağlantı yaşam döngüsü
 
 - Her iki cihaz da dinler; yalnız parmak izi küçük olan taraf bağlanır (çift bağlantı yarışı yok). Geri bağlanma adresi, eşin `Hello` ile bildirdiği dinleme portunu kullanır.
 - Eşleştirme modundaki uç yalnız eşleştirme modundaki uçla oturum kurar (`Hello.pairing`); eşleşmesi kaldırılmış cihazın eski eşi eşleştirme akışını bozamaz.
 - Duraklatmada bağlantı açık kalır; yerel kopyalar gönderilmez, gelenler uygulanmaz ama gelen olayın Lamport değeri gözlenir.
-- 5 sn'de bir `Ping`; 15 sn yanıt yoksa kopuk sayılır, 1→30 sn üstel beklemeyle yeniden bağlanılır.
+- 5 sn'de bir `Ping`; 15 sn hiçbir çerçeve gelmezse kopuk sayılır (okuma görevi her çerçevede `last_seen`'i günceller, görsel parçaları dahil), 1→30 sn üstel beklemeyle yeniden bağlanılır.
 - Çevrimdışı kuyruk yok; yeniden bağlanınca pano durumu gönderilmez, yalnız Lamport saatleri `Clock` ile eşitlenir (yeniden başlayan cihazın ilk kopyası reddedilmesin diye; 2026-10-17 gerçek cihaz testinde bulundu).
 
 ## Saklama

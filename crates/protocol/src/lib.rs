@@ -1,13 +1,21 @@
-//! Protokol v3: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
+//! Protokol v4: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
 //! Ayrıntı: `docs/protocol.md`.
+
+mod chunks;
+mod payload;
 
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const VERSION: u16 = 3;
+pub use chunks::{Assembler, IMAGE_CHUNK_BYTES, split};
+pub use payload::{Chunk, ContentKind, PNG_SIGNATURE, Payload};
+
+pub const VERSION: u16 = 4;
 pub const MAX_FRAME_BYTES: usize = 5 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
+/// Görseller parça parça gönderildiği için çerçeve sınırından büyük olabilir.
+pub const MAX_IMAGE_BYTES: usize = 32 * 1024 * 1024;
 
 pub type DeviceId = [u8; 16];
 pub type EventId = [u8; 16];
@@ -22,26 +30,18 @@ pub enum Message {
     /// Bağlantı kurulunca gönderilir: göndericinin Lamport saati.
     Clock { lamport: u64 },
     Clip(ClipEvent),
+    /// Parçalı görsel olayının başı; ardından toplam `total_bytes` eden `ImageChunk`'lar gelir.
+    ImageStart { event_id: EventId, lamport: u64, total_bytes: u32 },
+    ImageChunk { data: Chunk },
     Ping { nonce: u64 },
     Pong { nonce: u64 },
 }
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClipEvent {
     pub event_id: EventId,
     pub lamport: u64,
-    pub text: String,
-}
-
-/// Pano içeriği Debug çıktısında bile görünmesin.
-impl std::fmt::Debug for ClipEvent {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("ClipEvent")
-            .field("lamport", &self.lamport)
-            .field("text_bytes", &self.text.len())
-            .finish_non_exhaustive()
-    }
+    pub payload: Payload,
 }
 
 pub fn encode(message: &Message) -> anyhow::Result<Vec<u8>> {
@@ -80,12 +80,16 @@ pub async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> anyhow::Resul
 }
 
 fn validate(message: &Message) -> anyhow::Result<()> {
-    if let Message::Clip(event) = message
-        && event.text.len() > MAX_TEXT_BYTES
-    {
-        bail!("metin sınırı aşıldı: {} bayt", event.text.len());
+    match message {
+        Message::Clip(event) => event.payload.validate(),
+        Message::ImageStart { total_bytes, .. } if *total_bytes == 0 || *total_bytes as usize > MAX_IMAGE_BYTES => {
+            bail!("görsel sınırı aşıldı: {total_bytes} bayt")
+        }
+        Message::ImageChunk { data } if data.0.is_empty() || data.0.len() > IMAGE_CHUNK_BYTES => {
+            bail!("geçersiz görsel parçası: {} bayt", data.0.len())
+        }
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 #[cfg(test)]

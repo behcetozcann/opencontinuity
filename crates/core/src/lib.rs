@@ -2,7 +2,7 @@
 
 use std::collections::{HashSet, VecDeque};
 
-use oc_protocol::{ClipEvent, DeviceId, EventId};
+use oc_protocol::{ClipEvent, DeviceId, EventId, Payload};
 use sha2::{Digest, Sha256};
 
 const SEEN_EVENTS_CAPACITY: usize = 256;
@@ -41,18 +41,18 @@ impl SyncState {
 
     /// Yerel pano değişti. Karşıya gönderilecek olayı döner; kendi yazdığımız
     /// uzak içeriğin yankısıysa `None`.
-    pub fn on_local_text(&mut self, text: String) -> Option<ClipEvent> {
-        if self.pending_echo.take() == Some(content_hash(&text)) {
+    pub fn on_local(&mut self, payload: Payload) -> Option<ClipEvent> {
+        if self.pending_echo.take() == Some(content_hash(&payload)) {
             return None;
         }
         self.clock += 1;
         self.last_local_lamport = self.clock;
         let event_id = event_id(&self.device_id, self.clock);
         self.remember(event_id);
-        Some(ClipEvent { event_id, lamport: self.clock, text })
+        Some(ClipEvent { event_id, lamport: self.clock, payload })
     }
 
-    /// Eşten olay geldi. `true` ise metin panoya yazılmalı.
+    /// Eşten olay geldi. `true` ise içerik panoya yazılmalı.
     pub fn on_remote(&mut self, sender: &DeviceId, event: &ClipEvent) -> bool {
         if !self.remember(event.event_id) {
             return false;
@@ -61,7 +61,7 @@ impl SyncState {
         let newer_than_local_copy = event.lamport > self.last_local_lamport
             || (event.lamport == self.last_local_lamport && sender < &self.device_id);
         if newer_than_local_copy {
-            self.pending_echo = Some(content_hash(&event.text));
+            self.pending_echo = Some(content_hash(&event.payload));
         }
         newer_than_local_copy
     }
@@ -89,8 +89,12 @@ fn event_id(device_id: &DeviceId, lamport: u64) -> EventId {
     id
 }
 
-pub fn content_hash(text: &str) -> [u8; 32] {
-    Sha256::digest(text.as_bytes()).into()
+/// Tür de özete girer: aynı baytlı metin ile görsel birbirinin yankısı sayılmaz.
+pub fn content_hash(payload: &Payload) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update([payload.kind() as u8]);
+    hasher.update(payload.as_bytes());
+    hasher.finalize().into()
 }
 
 #[cfg(test)]

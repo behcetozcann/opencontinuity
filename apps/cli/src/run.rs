@@ -34,8 +34,11 @@ fn print_event(event: &Event, previous: &mut Snapshot) {
             }
             *previous = snapshot.clone();
         }
-        Event::Sent { bytes, lamport } => log(format!("Gönderildi: {bytes} bayt (lamport {lamport})")),
-        Event::Received { bytes, lamport } => log(format!("Alındı: {bytes} bayt (lamport {lamport})")),
+        Event::Sending { content, bytes } => log(format!("Gönderiliyor: {content:?}, {bytes} bayt")),
+        Event::Receiving { content, bytes } => log(format!("Alınıyor: {content:?}, {bytes} bayt")),
+        Event::TooLarge { content, bytes, limit } => log(format!("Çok büyük, gönderilmedi: {content:?}, {bytes} bayt (sınır {limit})")),
+        Event::Sent { content, bytes, lamport } => log(format!("Gönderildi: {content:?}, {bytes} bayt (lamport {lamport})")),
+        Event::Received { content, bytes, lamport } => log(format!("Alındı: {content:?}, {bytes} bayt (lamport {lamport})")),
         Event::Skipped { reason } => log(reason.clone()),
         Event::Disconnected { reason } => log(format!("Bağlantı koptu: {reason}")),
         Event::Paired { peer } => log(format!("Eşleşti: {peer}")),

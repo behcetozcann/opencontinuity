@@ -53,7 +53,7 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
         tokio::select! {
             command = context.commands.recv() => match command {
                 Some(Command::ConfirmCode(accepted)) if !own_accepted => {
-                    link.send(&Message::PairDecision { accepted }).await?;
+                    link.send(Message::PairDecision { accepted }).await?;
                     if !accepted {
                         bail!("eşleştirme reddedildi; hiçbir şey kaydedilmedi");
                     }
@@ -64,7 +64,7 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
                     }
                 }
                 Some(Command::CancelPairing) => {
-                    let _ = link.send(&Message::PairDecision { accepted: false }).await;
+                    let _ = link.send(Message::PairDecision { accepted: false }).await;
                     return Ok(Flow::Continue);
                 }
                 None | Some(Command::Shutdown) => return Ok(Flow::Shutdown),
@@ -78,8 +78,8 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
                 Ok(_) => bail!("eş beklenmeyen mesaj gönderdi"),
                 Err(error) => bail!("eşleştirme bağlantısı koptu: {error}"),
             },
-            text = context.clipboard.local_texts.recv() => {
-                text.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
+            copy = context.clipboard.local_copies.recv() => {
+                copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
             }
         }
     }
@@ -155,8 +155,8 @@ async fn wait_for_cancel(
                 Some(Command::Resume) => events.update(|snapshot| snapshot.paused = false),
                 Some(_) => {}
             },
-            text = clipboard.local_texts.recv() => {
-                if text.is_none() {
+            copy = clipboard.local_copies.recv() => {
+                if copy.is_none() {
                     return Flow::Shutdown;
                 }
             }

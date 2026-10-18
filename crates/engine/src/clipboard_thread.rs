@@ -4,7 +4,8 @@
 use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
-use oc_clipboard::Content;
+use oc_clipboard::{Clipboard, Content};
+use oc_protocol::Payload;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
@@ -18,8 +19,8 @@ pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPo
     let log = move |message: String| {
         let _ = events.send(Event::Diagnostic { message });
     };
-    let (local_sender, local_texts) = mpsc::channel(8);
-    let (writes, write_receiver) = std_mpsc::channel::<String>();
+    let (local_sender, local_copies) = mpsc::channel(8);
+    let (writes, write_receiver) = std_mpsc::channel::<Payload>();
     let (ready_sender, ready_receiver) = std_mpsc::channel();
     std::thread::Builder::new().name("pano".into()).spawn(move || {
         let clipboard = match oc_clipboard::system() {
@@ -36,12 +37,12 @@ pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPo
         let mut last_sequence = clipboard.sequence();
         loop {
             match write_receiver.recv_timeout(POLL_INTERVAL) {
-                Ok(text) => {
+                Ok(payload) => {
                     let before = clipboard.sequence();
-                    match clipboard.write_text(&text) {
+                    match write(clipboard.as_ref(), &payload) {
                         Ok(()) => log(format!(
-                            "[pano] uzak metin yazıldı ({}), sayaç {before}→{}",
-                            fingerprint(&text),
+                            "[pano] uzak içerik yazıldı ({}), sayaç {before}→{}",
+                            fingerprint(&payload),
                             clipboard.sequence()
                         )),
                         Err(error) => log(format!("[pano] yazılamadı: {error}")),
@@ -55,29 +56,41 @@ pub fn spawn(events: mpsc::UnboundedSender<Event>) -> anyhow::Result<ClipboardPo
                 continue;
             }
             let previous_sequence = std::mem::replace(&mut last_sequence, sequence);
-            let content = oc_clipboard::read_after_change(clipboard.as_ref());
-            let summary = match &content {
-                Ok(Content::Text(text)) => fingerprint(text),
-                Ok(Content::Concealed) => "gizli/geçici, atlandı".to_owned(),
-                Ok(Content::NoText) => "düz metin yok".to_owned(),
-                Err(error) => format!("okunamadı: {error}"),
+            let payload = match oc_clipboard::read_after_change(clipboard.as_ref()) {
+                Ok(Content::Text(text)) => Ok(Payload::Text(text)),
+                Ok(Content::Image(png)) => Ok(Payload::Png(png)),
+                Ok(Content::Concealed) => Err("gizli/geçici, atlandı".to_owned()),
+                Ok(Content::Unsupported) => Err("desteklenen içerik yok".to_owned()),
+                Err(error) => Err(format!("okunamadı: {error}")),
             };
+            let summary = payload.as_ref().map_or_else(Clone::clone, fingerprint);
             log(format!(
                 "[pano] sayaç {previous_sequence}→{sequence}: {summary}; {}",
                 clipboard.describe_source()
             ));
-            if let Ok(Content::Text(text)) = content
-                && local_sender.blocking_send(text).is_err()
+            if let Ok(payload) = payload
+                && local_sender.blocking_send(payload).is_err()
             {
                 return;
             }
         }
     })?;
     ready_receiver.recv()??;
-    Ok(ClipboardPort { local_texts, writes })
+    Ok(ClipboardPort { local_copies, writes })
 }
 
-/// İçeriği değil yalnız uzunluk ve hash önekini gösterir.
-fn fingerprint(text: &str) -> String {
-    format!("{} bayt, hash {}", text.len(), &hex::encode(Sha256::digest(text.as_bytes()))[..8])
+fn write(clipboard: &dyn Clipboard, payload: &Payload) -> anyhow::Result<()> {
+    match payload {
+        Payload::Text(text) => clipboard.write_text(text),
+        Payload::Png(png) => clipboard.write_png(png),
+    }
+}
+
+/// İçeriği değil yalnız tür, uzunluk ve hash önekini gösterir.
+fn fingerprint(payload: &Payload) -> String {
+    let kind = match payload {
+        Payload::Text(_) => "metin",
+        Payload::Png(_) => "görsel",
+    };
+    format!("{kind}, {} bayt, hash {}", payload.len(), &hex::encode(Sha256::digest(payload.as_bytes()))[..8])
 }

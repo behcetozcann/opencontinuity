@@ -19,6 +19,8 @@ enum Command {
     ClipWatch,
     /// Panoya metin yazar.
     ClipSet { text: String },
+    /// Panoya PNG dosyası yazar.
+    ClipSetImage { path: std::path::PathBuf },
     /// Cihaz kimliğini ve eşleşmiş eşi gösterir.
     Id,
     /// Eşleştirir. `--addr` yoksa aynı ağda `oc pair` çalıştıran cihazı kendisi bulur.
@@ -49,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::ClipWatch => clip::watch()?,
         Command::ClipSet { text } => clip::set(&text)?,
+        Command::ClipSetImage { path } => clip::set_image(&path)?,
         Command::Id => pair::show_identity()?,
         Command::Pair { addr } => pair::pair(addr).await?,
         Command::Unpair => pair::unpair()?,

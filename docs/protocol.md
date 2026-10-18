@@ -1,6 +1,6 @@
-# Protokol v3 (taslak)
+# Protokol v4 (taslak)
 
-v3 (2026-10-17): `Hello`'ya `listen_port` ve `pairing` eklendi; eşleştirme modundaki uç yalnız eşleştirme modundaki uçla konuşur. v2: `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
+v4 (2026-10-18): `Clip` metin ya da PNG taşır (`payload`); görseller `ImageStart` + `ImageChunk` parçalarıyla gider. v3 (2026-10-17): `Hello`'ya `listen_port` ve `pairing` eklendi; eşleştirme modundaki uç yalnız eşleştirme modundaki uçla konuşur. v2: `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
 
 ## Taşıma
 
@@ -16,6 +16,7 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 
 - Gövde en fazla **5 MiB**; aşan çerçeve bağlantıyı kapatır.
 - Metin en fazla **4 MiB** (UTF-8 bayt).
+- Görsel en fazla **32 MiB** (PNG bayt), en çok **256 KiB**'lık parçalarla. Her parça ayrı çerçevedir; uzun aktarımda da her çerçeve eşi canlı gösterir (heartbeat kesilmez).
 
 ## Mesajlar
 
@@ -24,7 +25,9 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 | `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String`, `listen_port: u16`, `pairing: bool` | Bağlantıdaki ilk mesaj; sürüm ya da mod (`pairing`) uyuşmazsa bağlantı kapanır. `listen_port` karşı tarafın geri bağlanacağı port |
 | `PairDecision` | `accepted: bool` | Yalnız eşleştirmede; iki uç da `true` göndermeden eş kaydedilmez |
 | `Clock` | `lamport: u64` | `oc run` bağlantısında `Hello`'dan hemen sonra; alan taraf saatini `max(kendi, gelen)` yapar. Yeniden başlayan cihazın ilk kopyası böylece eski görünmez |
-| `Clip` | `event_id: [u8; 16]`, `lamport: u64`, `text: String` | Düz metin pano olayı |
+| `Clip` | `event_id: [u8; 16]`, `lamport: u64`, `payload: Text(String) \| Png(Vec<u8>)` | Pano olayı. `Png` PNG imzasıyla başlamalı. Gönderici görselleri bu mesajla değil parçalarla yollar |
+| `ImageStart` | `event_id`, `lamport`, `total_bytes: u32` | Parçalı görselin başı; 1 ≤ `total_bytes` ≤ 32 MiB. Önceki görsel bitmeden yenisi gelirse bağlantı kapanır |
+| `ImageChunk` | `data: Vec<u8>` | 1 B – 256 KiB. Başlangıçsız parça ya da bildirilen boyutu aşan toplam bağlantıyı kapatır; tamamlanınca alan taraf tek `Clip` olayı olarak işler |
 | `Ping` | `nonce: u64` | 5 sn'de bir |
 | `Pong` | `nonce: u64` | |
 

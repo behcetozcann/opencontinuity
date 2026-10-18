@@ -61,7 +61,7 @@ Sonra iki bilgisayarda da uygulamayı açın, **Eşleştir**'e basın, iki ekran
 
 1. Bilgisayarlar aynı ağda mDNS/Bonjour ile birbirini bulur.
 2. İlk eşleştirmede iki ekranda aynı 6 haneli kod görünür; bu kod TLS oturumuna bağlıdır, araya giren biri aynı kodu üretemez.
-3. Sonrasında bir cihazda kopyaladığınız düz metin diğerinin panosuna yazılır. Döngü ve çakışma önleme, Lamport saatleriyle "son yerel kopya önceliklidir" kuralına göre çalışır.
+3. Sonrasında bir cihazda kopyaladığınız düz metin ya da (0.1.3 ile) görsel — ekran görüntüsü, tarayıcıdan kopyalanan resim — diğerinin panosuna yazılır. Döngü ve çakışma önleme, Lamport saatleriyle "son yerel kopya önceliklidir" kuralına göre çalışır.
 
 Ayrıntı: [mimari](docs/architecture.md) · [protokol](docs/protocol.md) · [güvenlik modeli](docs/security-model.md)
 

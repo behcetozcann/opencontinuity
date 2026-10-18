@@ -1,6 +1,7 @@
 //! Motorun dışarıya bildirdiği olaylar. Pano içeriği hiçbir olaya girmez;
 //! yalnız bayt sayısı, Lamport değeri ve teşhis metni.
 
+use oc_protocol::ContentKind;
 use serde::Serialize;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -39,8 +40,14 @@ pub struct Snapshot {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Event {
     State(Snapshot),
-    Sent { bytes: usize, lamport: u64 },
-    Received { bytes: usize, lamport: u64 },
+    /// Görsel gönderimi başladı; büyük görsellerde birkaç saniye sürebilir, sonunda `Sent` ya da `Disconnected`.
+    Sending { content: ContentKind, bytes: usize },
+    /// Eşten görsel gelmeye başladı; sonunda `Received`, `Skipped` ya da `Disconnected`.
+    Receiving { content: ContentKind, bytes: usize },
+    Sent { content: ContentKind, bytes: usize, lamport: u64 },
+    Received { content: ContentKind, bytes: usize, lamport: u64 },
+    /// Kopya sınırı aştığı için gönderilmedi.
+    TooLarge { content: ContentKind, bytes: usize, limit: usize },
     Skipped { reason: String },
     Disconnected { reason: String },
     Paired { peer: String },

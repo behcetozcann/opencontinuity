@@ -14,7 +14,7 @@
 | Eşleştirmede araya girme (MITM) | 6 haneli SAS, TLS exporter'a bağlı; iki uçta kullanıcı onayı |
 | Eşleşmemiş cihazın bağlanıp pano okuması/yazması | Eşleşme sonrası parmak izi sabitleme; bilinmeyen sertifika el sıkışmada reddedilir |
 | mDNS'te sahte cihaz yayını | Keşif yalnızca adres verir; güven parmak izine dayanır, TXT kaydına değil |
-| Kötü niyetli dev çerçeve / bellek tüketme | Çerçeve ≤ 5 MiB, metin ≤ 4 MiB; uzunluk okunmadan bellek ayrılmaz |
+| Kötü niyetli dev çerçeve / bellek tüketme | Çerçeve ≤ 5 MiB, metin ≤ 4 MiB, görsel ≤ 32 MiB (parçalı; toplam `ImageStart`'ta doğrulanmadan ayrılmaz), PNG imzası zorunlu; uzunluk okunmadan bellek ayrılmaz. Windows'ta DIB dönüşümü 50 MP üstünde yapılmaz |
 | Geçersiz UTF-8 / bozuk mesaj | Çözme hatası bağlantıyı kapatır, panoya hiçbir şey yazılmaz |
 | Log veya test kaydına pano içeriği sızması | İçerik asla loglanmaz; yalnız uzunluk + hash'in ilk 8 hex karakteri |
 | Parola yöneticisi kopyalarının gönderilmesi | macOS Concealed/Transient tipleri, Windows Exclude/CanIncludeInClipboardHistory biçimleri varsa gönderilmez |

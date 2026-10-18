@@ -1,7 +1,24 @@
 use super::*;
 
 fn clip(text: &str) -> Message {
-    Message::Clip(ClipEvent { event_id: [7; 16], lamport: 42, text: text.to_owned() })
+    Message::Clip(ClipEvent { event_id: [7; 16], lamport: 42, payload: Payload::Text(text.to_owned()) })
+}
+
+fn png(length: usize) -> Vec<u8> {
+    let mut png = PNG_SIGNATURE.to_vec();
+    png.extend((0..length - PNG_SIGNATURE.len()).map(|index| (index % 251) as u8));
+    png
+}
+
+fn image(length: usize) -> Message {
+    Message::Clip(ClipEvent { event_id: [9; 16], lamport: 5, payload: Payload::Png(png(length)) })
+}
+
+fn text_of(message: Message) -> String {
+    match message {
+        Message::Clip(ClipEvent { payload: Payload::Text(text), .. }) => text,
+        other => panic!("metin bekleniyordu: {other:?}"),
+    }
 }
 
 async fn round_trip(message: &Message) -> Message {
@@ -22,6 +39,9 @@ async fn every_message_type_round_trips() {
         Message::PairDecision { accepted: true },
         Message::Clock { lamport: 7 },
         clip("merhaba"),
+        image(64),
+        Message::ImageStart { event_id: [2; 16], lamport: 3, total_bytes: 10 },
+        Message::ImageChunk { data: Chunk(vec![1, 2, 3]) },
         Message::Ping { nonce: u64::MAX },
         Message::Pong { nonce: 0 },
     ];
@@ -41,16 +61,14 @@ async fn text_is_preserved_byte_for_byte() {
         "\u{0}null karakter",
     ];
     for sample in samples {
-        let Message::Clip(event) = round_trip(&clip(sample)).await else { panic!() };
-        assert_eq!(event.text.as_bytes(), sample.as_bytes());
+        assert_eq!(text_of(round_trip(&clip(sample)).await).as_bytes(), sample.as_bytes());
     }
 }
 
 #[tokio::test]
 async fn text_limit_is_inclusive() {
     let at_limit = "a".repeat(MAX_TEXT_BYTES);
-    let Message::Clip(event) = round_trip(&clip(&at_limit)).await else { panic!() };
-    assert_eq!(event.text.len(), MAX_TEXT_BYTES);
+    assert_eq!(text_of(round_trip(&clip(&at_limit)).await).len(), MAX_TEXT_BYTES);
     assert!(encode(&clip(&"a".repeat(MAX_TEXT_BYTES + 1))).is_err());
 }
 
@@ -79,4 +97,56 @@ fn invalid_utf8_is_rejected() {
 fn debug_output_hides_clipboard_text() {
     let debug = format!("{:?}", clip("gizli-parola"));
     assert!(!debug.contains("gizli-parola"));
+    let debug = format!("{:?}", Message::ImageChunk { data: Chunk(vec![42; 3]) });
+    assert!(!debug.contains("42"));
+}
+
+#[tokio::test]
+async fn image_larger_than_frame_survives_split_and_assembly() {
+    let original = image(MAX_FRAME_BYTES * 2 + 17);
+    let parts = split(original.clone());
+    assert_eq!(parts.len(), 1 + (MAX_FRAME_BYTES * 2 + 17).div_ceil(IMAGE_CHUNK_BYTES));
+    let mut assembler = Assembler::default();
+    let mut completed = Vec::new();
+    for part in parts {
+        if let Some(message) = assembler.push(round_trip(&part).await).unwrap() {
+            completed.push(message);
+        }
+    }
+    assert_eq!(completed, vec![original]);
+}
+
+#[test]
+fn other_messages_pass_through_split_and_assembler() {
+    assert_eq!(split(clip("a")), vec![clip("a")]);
+    let mut assembler = Assembler::default();
+    assert_eq!(assembler.push(Message::Ping { nonce: 1 }).unwrap(), Some(Message::Ping { nonce: 1 }));
+}
+
+#[test]
+fn image_limits_and_signature_are_enforced() {
+    assert!(encode(&image(64)).is_ok());
+    let fake = Message::Clip(ClipEvent { event_id: [0; 16], lamport: 1, payload: Payload::Png(vec![0; 64]) });
+    assert!(encode(&fake).is_err(), "PNG imzası olmayan görsel reddedilmeli");
+    let too_big = Message::ImageStart { event_id: [0; 16], lamport: 1, total_bytes: MAX_IMAGE_BYTES as u32 + 1 };
+    assert!(encode(&too_big).is_err());
+    assert!(encode(&Message::ImageChunk { data: Chunk(vec![0; IMAGE_CHUNK_BYTES + 1]) }).is_err());
+}
+
+#[test]
+fn malformed_chunk_sequences_are_rejected() {
+    let start = Message::ImageStart { event_id: [0; 16], lamport: 1, total_bytes: 16 };
+    let chunk = |length| Message::ImageChunk { data: Chunk(png(16)[..length].to_vec()) };
+
+    assert!(Assembler::default().push(chunk(8)).is_err(), "başlangıçsız parça");
+    let mut assembler = Assembler::default();
+    assembler.push(start.clone()).unwrap();
+    assert!(assembler.push(start.clone()).is_err(), "iç içe başlangıç");
+    let mut assembler = Assembler::default();
+    assembler.push(start.clone()).unwrap();
+    assembler.push(chunk(12)).unwrap();
+    assert!(assembler.push(chunk(8)).is_err(), "bildirilen boyutu aşan parça");
+    let mut assembler = Assembler::default();
+    assembler.push(start).unwrap();
+    assert!(assembler.push(Message::ImageChunk { data: Chunk(vec![0; 16]) }).is_err(), "PNG olmayan birleşim");
 }

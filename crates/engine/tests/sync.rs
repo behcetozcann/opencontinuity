@@ -2,8 +2,8 @@ mod common;
 
 use std::time::Duration;
 
-use common::{Node, code_of, pair, paired_and_connected};
-use oc_engine::{Command, Event, PairingStage};
+use common::{Node, code_of, pair, paired_and_connected, text};
+use oc_engine::{Command, ContentKind, Event, PairingStage, Payload};
 use oc_pairing::{Identity, Peer, PeerStore};
 use oc_protocol::Message;
 use oc_transport::Trust;
@@ -13,15 +13,42 @@ use tokio::net::TcpListener;
 async fn pairs_and_syncs_both_ways_without_loop() {
     let (mac, windows) = paired_and_connected().await;
 
-    mac.copy.send("merhaba".into()).await.unwrap();
-    assert_eq!(windows.next_written().await, "merhaba");
+    mac.copy.send(text("merhaba")).await.unwrap();
+    assert_eq!(windows.next_written().await, text("merhaba"));
     // Gerçek panoda yazılan metin izleyiciye yerel kopya olarak geri döner.
-    windows.copy.send("merhaba".into()).await.unwrap();
+    windows.copy.send(text("merhaba")).await.unwrap();
     mac.assert_nothing_written(Duration::from_millis(400)).await;
 
-    let text = "Çağrı ışığı 👋\r\nikinci satır";
-    windows.copy.send(text.into()).await.unwrap();
-    assert_eq!(mac.next_written().await, text);
+    let multiline = text("Çağrı ışığı 👋\r\nikinci satır");
+    windows.copy.send(multiline.clone()).await.unwrap();
+    assert_eq!(mac.next_written().await, multiline);
+}
+
+/// Çerçeve sınırından büyük görsel parçalanarak gider; yankısı geri dönmez.
+#[tokio::test]
+async fn large_image_syncs_in_chunks_without_echo() {
+    let (mut mac, mut windows) = paired_and_connected().await;
+    let mut png = oc_protocol::PNG_SIGNATURE.to_vec();
+    png.extend((0..oc_protocol::MAX_FRAME_BYTES + 300_000).map(|index| (index % 253) as u8));
+    let image = Payload::Png(png);
+
+    mac.copy.send(image.clone()).await.unwrap();
+    assert_eq!(windows.next_written().await, image);
+    // Arayüz "gönderiliyor/alınıyor" gösterebilsin: başlangıç olayı tamamlanmadan önce gelir.
+    mac.wait_for(|event| matches!(event, Event::Sending { content: ContentKind::Image, .. })).await;
+    let sent = mac.wait_for(|event| matches!(event, Event::Sent { .. })).await;
+    assert!(matches!(sent, Event::Sent { content: ContentKind::Image, .. }));
+    let receiving = windows.wait_for(|event| matches!(event, Event::Receiving { .. } | Event::Received { .. })).await;
+    assert!(matches!(receiving, Event::Receiving { content: ContentKind::Image, .. }));
+    windows.copy.send(image).await.unwrap();
+    mac.assert_nothing_written(Duration::from_millis(400)).await;
+
+    // Görselden sonra bağlantı sağlıklı: metin de geçer, kopma olmadı.
+    windows.copy.send(text("sonra")).await.unwrap();
+    assert_eq!(mac.next_written().await, text("sonra"));
+    while let Ok(event) = windows.events.try_recv() {
+        assert!(!matches!(event, Event::Disconnected { .. }), "görsel aktarımı bağlantıyı koparmamalı");
+    }
 }
 
 #[tokio::test]
@@ -30,16 +57,16 @@ async fn pause_blocks_sending_and_applying() {
     mac.handle.send(Command::Pause);
     mac.wait_state(|snapshot| snapshot.paused).await;
 
-    mac.copy.send("gizli not".into()).await.unwrap();
+    mac.copy.send(text("gizli not")).await.unwrap();
     windows.assert_nothing_written(Duration::from_millis(400)).await;
-    windows.copy.send("windows kopyası".into()).await.unwrap();
+    windows.copy.send(text("windows kopyası")).await.unwrap();
     mac.wait_for(|event| matches!(event, Event::Skipped { .. })).await;
     mac.assert_nothing_written(Duration::from_millis(200)).await;
 
     mac.handle.send(Command::Resume);
     mac.wait_state(|snapshot| !snapshot.paused).await;
-    mac.copy.send("devam".into()).await.unwrap();
-    assert_eq!(windows.next_written().await, "devam");
+    mac.copy.send(text("devam")).await.unwrap();
+    assert_eq!(windows.next_written().await, text("devam"));
 }
 
 #[tokio::test]
@@ -65,8 +92,8 @@ async fn unpaired_device_rejects_old_peer_and_can_pair_again() {
     windows.wait_state(|snapshot| snapshot.peer.is_none()).await;
     pair(&mut mac, &mut windows).await;
     mac.wait_connected().await;
-    mac.copy.send("yeniden".into()).await.unwrap();
-    assert_eq!(windows.next_written().await, "yeniden");
+    mac.copy.send(text("yeniden")).await.unwrap();
+    assert_eq!(windows.next_written().await, text("yeniden"));
 }
 
 #[tokio::test]

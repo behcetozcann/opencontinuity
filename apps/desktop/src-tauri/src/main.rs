@@ -10,7 +10,7 @@ mod updater;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use oc_engine::{ClipboardSource, Engine, EngineConfig, Event, Handle, Snapshot};
+use oc_engine::{ClipboardSource, ContentKind, Engine, EngineConfig, Event, Handle, Snapshot};
 use oc_pairing::PeerStore;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
@@ -21,15 +21,17 @@ const AUTOSTART_MARKER: &str = "autostart-initialized";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Transfer {
+    /// "sent" | "received" | "too_large" (sınırı aştığı için gönderilmedi)
     direction: &'static str,
+    content: ContentKind,
     bytes: usize,
     at_ms: u64,
 }
 
 impl Transfer {
-    fn now(direction: &'static str, bytes: usize) -> Self {
+    fn now(direction: &'static str, content: ContentKind, bytes: usize) -> Self {
         let at_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_millis() as u64).unwrap_or(0);
-        Self { direction, bytes, at_ms }
+        Self { direction, content, bytes, at_ms }
     }
 }
 
@@ -42,6 +44,8 @@ pub struct View {
     snapshot: Snapshot,
     /// En yenisi başta.
     recent_transfers: Vec<Transfer>,
+    /// Süren görsel aktarımı; bitince, atlanınca ya da bağlantı kopunca temizlenir.
+    in_flight: Option<Transfer>,
     pairing_error: Option<String>,
     /// Motor durduysa (ör. port kullanımda) nedeni.
     engine_error: Option<String>,
@@ -50,6 +54,7 @@ pub struct View {
 
 impl View {
     fn record_transfer(&mut self, transfer: Transfer) {
+        self.in_flight = None;
         self.recent_transfers.insert(0, transfer);
         self.recent_transfers.truncate(RECENT_TRANSFERS);
     }
@@ -123,13 +128,18 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("OpenContinuity başlatılamadı");
-    app.run(|app, event| match event {
-        RunEvent::ExitRequested { api, code: None, .. } => api.prevent_exit(),
-        // macOS'ta çalışan uygulamanın simgesine tıklanınca ikinci süreç başlamaz,
-        // yalnız bu olay gelir; pencere açılmazsa uygulama "açılmıyor" görünür.
-        #[cfg(target_os = "macos")]
-        RunEvent::Reopen { .. } => show_window(app),
-        _ => {}
+    app.run(|app, event| {
+        // Yalnız macOS kolunda kullanılır.
+        #[cfg(not(target_os = "macos"))]
+        let _ = app;
+        match event {
+            RunEvent::ExitRequested { api, code: None, .. } => api.prevent_exit(),
+            // macOS'ta çalışan uygulamanın simgesine tıklanınca ikinci süreç başlamaz,
+            // yalnız bu olay gelir; pencere açılmazsa uygulama "açılmıyor" görünür.
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => show_window(app),
+            _ => {}
+        }
     });
 }
 
@@ -162,11 +172,21 @@ pub fn spawn_engine(app: AppHandle, engine: Engine, mut events: UnboundedReceive
 fn apply_event(app: &AppHandle, event: Event) {
     match event {
         Event::State(snapshot) => update_view(app, |view| view.snapshot = snapshot),
-        Event::Sent { bytes, .. } => update_view(app, |view| view.record_transfer(Transfer::now("sent", bytes))),
-        Event::Received { bytes, .. } => update_view(app, |view| view.record_transfer(Transfer::now("received", bytes))),
+        Event::Sending { content, bytes } => update_view(app, |view| view.in_flight = Some(Transfer::now("sent", content, bytes))),
+        Event::Receiving { content, bytes } => {
+            update_view(app, |view| view.in_flight = Some(Transfer::now("received", content, bytes)))
+        }
+        Event::Sent { content, bytes, .. } => update_view(app, |view| view.record_transfer(Transfer::now("sent", content, bytes))),
+        Event::Received { content, bytes, .. } => {
+            update_view(app, |view| view.record_transfer(Transfer::now("received", content, bytes)))
+        }
+        Event::TooLarge { content, bytes, .. } => {
+            update_view(app, |view| view.record_transfer(Transfer::now("too_large", content, bytes)))
+        }
+        Event::Skipped { .. } | Event::Disconnected { .. } => update_view(app, |view| view.in_flight = None),
         Event::PairingFailed { reason } => update_view(app, |view| view.pairing_error = Some(reason)),
         Event::Paired { .. } => update_view(app, |view| view.pairing_error = None),
-        Event::Skipped { .. } | Event::Disconnected { .. } | Event::Diagnostic { .. } => {}
+        Event::Diagnostic { .. } => {}
     }
 }
 

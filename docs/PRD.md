@@ -19,6 +19,12 @@ Mac ve Windows arasında metin taşımak için bugün e-posta, mesajlaşma uygul
 - Bağlantı kopması ve uyku/uyanma sonrası kendiliğinden toparlanır.
 - Uzaktan gelen içerik geri yansımaz (döngü yok); az önceki yerel kopya, gecikmiş uzak veriyle ezilmez.
 
+## Faz 2 — görsel panosu (V0.1.1)
+
+- Ekran görüntüsü, tarayıcıdan "görseli kopyala" ve görsel uygulamalarından kopyalanan resim iki yönde gider (aktarımda PNG; macOS TIFF, Windows DIB kaynakları PNG'ye çevrilir).
+- 32 MB'a kadar görsel parça parça gider; aktarım sürerken bağlantı kopmaz.
+- Panoda metin de varsa metin gider (Office kopyaları).
+
 ## Kapsam dışı (Faz 0 ve V0.1)
 
 Görsel, zengin metin, dosya, pano geçmişi, çoklu cihaz, bulut/relay, mobil, fare/klavye paylaşımı, çevrimdışı kuyruk.
