@@ -67,9 +67,11 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 | G5 | Büyük görsel (5K ekran görüntüsü, >5 MiB): bağlantı kopmaz, ardından metin de gider | [ ] | [ ] |
 | G6 | Excel hücreleri / Word metni kopyala → metin gider, görsel gitmez | [ ] | [ ] |
 | G7 | Alınan görselin yankısı geri gönderilmez (karşı tarafta "Alındı" sonrası "Gönderildi" yok) | [ ] | [ ] |
-| G8 | Finder / Gezgin'de dosya kopyala → dosya adı metni gider (dosya aktarımı yok) | [ ] | [ ] |
+| G8 | ~~Finder / Gezgin'de dosya kopyala → dosya adı metni gider~~ 0.1.4'ten beri dosya aktarılıyor, bkz. D1–D8 | [ ] | [ ] |
 
 ## Gerçek cihaz — Faz 2 dosya aktarımı (v5)
+
+2026-10-18: kullanıcı 0.1.4'te kalan G ve D testlerini "testler tamam" diye toplu bildirdi; madde madde sonuç ve kayıt alınmadı, bu yüzden aşağıda ayrı ayrı işaretlenmedi. Bir sonraki sorun bildiriminde ilgili madde kayıtla doğrulanır.
 
 | # | Senaryo | Mac | Windows |
 |---|---|---|---|

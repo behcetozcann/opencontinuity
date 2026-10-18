@@ -29,18 +29,25 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 - Gerçek cihaz testi yapılmadıysa `docs/test-plan.md`'de işaretlenmez.
 - Dosya başına 300 satırı geçme.
 
-## Durum (2026-10-18)
+## Durum (2026-10-18, oturum sonu)
 
-Faz 1 kodu `main`'de; depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.2** (yeni arayüz), macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (run 39111409024, `notarize=false`). İki cihaz güncellendi, Yerel Ağ izni tuttu, sihirbazla eşleşti, Mac→Windows metin gitti (2026-10-18). Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
+Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.4** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ama **noterliksiz** (`notarize=false`; kullanıcı Apple'ı beklememeyi seçti). İki cihaz güncelleyiciyle 0.1.4'te, bağlı. Noterliksiz DMG tarayıcıdan indirilip yeni kurulursa Gatekeeper engeller; güncelleyiciyle kurulum sorunsuz.
 
-Hesabın ilk iki noterlik gönderimi (2026-10-17 21:11 / 21:35 UTC) Apple'da hâlâ "In Progress" (ilk Developer ID incelemesi). Notarize=true derleme 6 saatte zaman aşımına düşüyor; onay gelmeden yeniden deneme.
+Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
+- Görsel panosu (0.1.3, v4): PNG, ≤ 32 MiB, 256 KiB parçalar. macOS `public.png`/TIFF→PNG; Windows `PNG` biçimi (IEND'e göre kırpılır) / CF_DIB→PNG, yazarken PNG + CF_DIB. Metin + görsel birlikteyse metin gider.
+- Dosya/klasör (0.1.4, v5): ≤ 500 MiB, 5.000 girdi; `engine/src/files.rs` (toplama, diske yazma, kabul/budama), `writer.rs` (ayrı yazma görevi; ping araya girer, yeni kopya süren aktarımı `TransferCancel` ile bırakır), `transfer.rs` (döngünün pano tarafı). Gelenler `İndirilenler/OpenContinuity/<tarih>`; son 10 aktarım kalır.
+- Arayüz: tür simgesi + yön rozeti, "gönderiliyor/alınıyor" satırı ve çizgide akış, sınır aşımı satırı, gelen dosyada "Göster", Ayarlar → Gelen dosyalar.
+- Test planı: G0–G2, D0, D2 kayıtla işaretli; kalan G/D'yi kullanıcı toplu "tamam" dedi (madde madde işaretlenmedi).
+
+Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3 sn sonra aynı içerikle yeniden yazar → aynı görsel 2 kez gider (kullanıcı filtre istemedi). Win+Shift+S alıntısı kopyalamadan panoya girer, Mac ⌘⇧4 dosyaya kaydeder.
 
 Sıradaki:
-1. `scripts/notary-status.sh` → "Accepted" ise sürümü 0.1.3 yap, etiketle, `gh workflow run release.yml --ref v0.1.3` (notarize varsayılan açık) → `scripts/publish-release.sh v0.1.3 --publish` → `spctl -a -vv` "Notarized Developer ID" doğrula.
-2. Faz 1 testleri (2026-10-18): F2, F3, F6–F9, F11, F12 geçti (`docs/test-plan.md`). Kalan: F1, F4 (artık uygulanamaz, Faz 0 eşleşmesi yok), F5 (kaldır → yeniden eşleştir), F10 (yeniden başlatınca kendiliğinden başlama), F9'da Çık. Açık iki bulgu (test-plan "Bulgular"): Windows Mac'in uykusunu ~4 dk fark etmedi (yeniden üretilmedi; önce yalnız kapak kapat/aç testi + Windows oc.log); kopukken yapılan kopya bağlanınca gönderilmiyor (kullanıcıya 'gönderilsin mi' soruldu, cevap yok).
-3. Faz 2: görsel panosu kodu yazıldı (2026-10-18, protokol **v4**: `Payload::Text|Png`, görseller 256 KiB `ImageStart`/`ImageChunk` parçalarıyla, ≤ 32 MiB; parçalama/birleştirme `engine/src/link.rs`'te). macOS adaptörü gerçek panoda doğrulandı (G0); Windows adaptörü yalnız derleniyor + DIB dönüşüm testleri. Arayüz: süren görsel aktarımı (`in_flight`), tür simgesi + yön rozeti, 32 MiB'ı aşan kopya satırı. 0.1.3 noterliksiz yayınlanıyor (Apple beklenmeden, kullanıcı kararı). 0.1.3'te Windows ekran alıntısı → Mac gerçek cihazda geçti (Ekran Alıntısı Aracı panoyu 0,3 sn sonra aynı içerikle yeniden yazıyor → 2 gönderim; zararsız, kullanıcı filtre istemedi). Dosya aktarımı yazıldı (protokol **v5**, 0.1.4): `engine/src/files.rs` (toplama, diske yazma, kabul/budama), `writer.rs` (öncelikli yazma görevi, yeni kopya aktarımı bırakır), `transfer.rs` (döngünün pano tarafı). Sıradaki: test-plan G1–G8 ve D1–D8.
+1. **Windows'ta animasyonlar duruyor** (kullanıcı bildirdi, çözülmedi). Tahmin: Windows "Animasyon efektleri" kapalı → `prefers-reduced-motion` → CSS bilerek durduruyor. Kullanıcıya ayar soruldu, cevap yok. Ayar açıksa: arayüz açılışta `matchMedia('(prefers-reduced-motion: reduce)').matches`'ı teşhis kaydına yazsın, ölçerek bul.
+2. `scripts/notary-status.sh` → "Accepted" ise noterlikli sürüm (`notarize` varsayılan açık) + `spctl -a -vv` doğrula. 2026-10-18 öğlen hâlâ "In Progress".
+3. Faz 1 kalanları: F1, F5 (kaldır → yeniden eşleştir), F10 (yeniden başlatınca kendiliğinden başlama), F9'da Çık. Açık bulgular: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi); kopukken yapılan kopya bağlanınca gönderilmiyor (kullanıcı kararı bekleniyor).
+4. Faz 2 devamı (plan §9): çoklu cihaz, Linux; isteğe bağlı "dosya paylaşımı" anahtarı (Gezgin'de yerel taşıma için yapılan her kopya da karşıya gidiyor).
 
-Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
+Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap; `icons/` altında `cargo tauri icon`'un ürettiği izlenmeyen mobil simgeler (silmek için kullanıcı onayı gerekli).
 
 ## Yayın akışı
 
@@ -57,4 +64,5 @@ Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket i�
 - Mac tarafı arka planda: `./target/release/oc run > <scratchpad>/mac-run.log 2>&1 &`. Etkileşimli `oc pair` için `tail -f cevap.txt | oc pair`, kod eşleşince `echo e >> cevap.txt`.
 - Protokol mesajı eklenirse `protocol::VERSION` artırılır; iki taraf aynı sürüme güncellenmeden bağlanmaz.
 - Masaüstü uygulaması teşhis kaydını `<config>/oc.log`'a yazar (önceki oturum `oc.old.log`); config dizini macOS'ta `~/Library/Application Support/org.OpenContinuity.OpenContinuity`, Windows'ta `%APPDATA%\OpenContinuity\OpenContinuity\config`. Aynı Mac'te ikinci örnek: `OC_CONFIG_DIR=<dizin> OC_PORT=<port>` (tek örnek kilidi ve girişte başlatma o zaman devre dışı).
+- Test için panoya yazma: `oc clip-set <metin>`, `oc clip-set-image <png>`, `oc clip-set-files <yollar…>`; okuma `oc clip-watch`. Gelen dosya klasörü `OC_FILES_DIR` ile değiştirilebilir.
 - Teşhis için `oc run` her pano değişikliğinde sayaç, sahip süreç/biçimler ve hash öneki yazar; içerik yazılmaz. Tekrar/çift olayda önce bu kayıtla kaynağı ölç, filtre ekleme.
