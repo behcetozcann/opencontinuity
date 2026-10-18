@@ -9,6 +9,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      notarize:
+        description: "macOS paketi Apple noterliğinden geçsin (kapalıyken yalnız Developer ID imzası)"
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -52,8 +57,9 @@ jobs:
           APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
           APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
-          APPLE_API_ISSUER: ${{ runner.os == 'macOS' && secrets.APPLE_API_ISSUER || '' }}
-          APPLE_API_KEY: ${{ runner.os == 'macOS' && secrets.APPLE_API_KEY || '' }}
+          # Noterlik bilgisi verilmezse tauri imzalar ama Apple'a göndermez.
+          APPLE_API_ISSUER: ${{ runner.os == 'macOS' && inputs.notarize != false && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY: ${{ runner.os == 'macOS' && inputs.notarize != false && secrets.APPLE_API_KEY || '' }}
         with:
           projectPath: apps/desktop
           tauriScript: npx --yes @tauri-apps/cli@2
