@@ -16,9 +16,12 @@ use crate::dial::{Dialed, Dialer};
 use crate::events::{Emitter, Event};
 use crate::group::{Group, Member};
 use crate::link::{self, Link, LinkId};
-use crate::{Command, Context, Flow, files, next_found, transfer};
+use crate::pairing::{Input, Pairing};
+use crate::{Command, Context, files, next_found, pairing_host, transfer};
 
-pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow> {
+/// Eş olmasa da çalışır (dinleyici ve keşif açık); eşleştirme de burada,
+/// senkronun yanında yürür. `Shutdown` gelince döner.
+pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<()> {
     let port = context.config.port;
     let timing = context.config.timing;
     let own = context.identity.fingerprint();
@@ -38,32 +41,35 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow
     let mut next_link_id: LinkId = 0;
     let mut reported: Option<u64> = None;
     let mut heartbeat = interval(timing.heartbeat_interval);
+    let mut pairing: Option<Pairing> = None;
 
     let names: Vec<&str> = group.members.iter().map(|member| member.peer.name.as_str()).collect();
-    context.events.diagnostic(format!("Çalışıyor. Grup: {}.", names.join(", ")));
+    context.events.diagnostic(if names.is_empty() { "Çalışıyor; henüz eş yok.".to_owned() } else { format!("Çalışıyor. Grup: {}.", names.join(", ")) });
     loop {
         let next_dial = group.next_dial();
         tokio::select! {
             command = context.commands.recv() => match command {
-                None | Some(Command::Shutdown) => return Ok(Flow::Shutdown),
-                Some(Command::StartPairing { address }) => return Ok(Flow::Pair { address }),
+                None | Some(Command::Shutdown) => return Ok(()),
+                Some(Command::StartPairing { address }) => pairing_host::start(context, discovery.as_ref(), &mut pairing, address),
+                Some(Command::ConfirmCode(accepted)) => pairing_host::forward(&pairing, Input::Confirm(accepted)),
+                Some(Command::CancelPairing) => pairing_host::forward(&pairing, Input::Cancel),
                 Some(Command::Unpair { fingerprint_prefix }) => {
                     if let Some(fingerprint) = group.by_prefix(&fingerprint_prefix) {
                         context.store.remove(&fingerprint)?;
                         group.remove(&fingerprint);
-                        if group.members.is_empty() {
-                            return Ok(Flow::Continue);
-                        }
                     }
                 }
                 Some(Command::Pause) => context.events.update(|snapshot| snapshot.paused = true),
                 Some(Command::Resume) => context.events.update(|snapshot| snapshot.paused = false),
-                Some(_) => {}
             },
             accepted = listener.accept() => {
                 let (tcp, remote) = accepted?;
-                let trust = group.trust();
+                let trust = pairing_host::accept_trust(&group, &pairing);
                 match timeout(timing.handshake_timeout, oc_transport::accept(tcp, &context.identity, trust, port)).await {
+                    Ok(Ok(session)) if session.pairing => {
+                        let address = SocketAddr::new(remote.ip(), session.peer_listen_port);
+                        pairing_host::forward(&pairing, Input::Accepted(Box::new(session), address));
+                    }
                     Ok(Ok(session)) => {
                         let address = SocketAddr::new(remote.ip(), session.peer_listen_port);
                         let id = take_id(&mut next_link_id);
@@ -74,6 +80,9 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow
                 }
             }
             Some(found) = next_found(&mut discovered) => {
+                if found.pairing {
+                    pairing_host::forward(&pairing, Input::Found(found.clone()));
+                }
                 if let Some(member) = group.members.iter_mut().find(|member| member.hex() == found.fingerprint_hex) {
                     let listed: Vec<String> = found.addresses.iter().map(ToString::to_string).collect();
                     context.events.diagnostic(format!("{} ağda bulundu: {}", member.peer.name, listed.join(", ")));
@@ -135,6 +144,9 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow
                     }
                     other => on_message(context, &mut state, member, other)?,
                 }
+            }
+            Some(update) = pairing_host::next_update(&mut pairing) => {
+                pairing_host::apply(context, &mut group, discovery.as_ref(), &mut pairing, update)?;
             }
             _ = heartbeat.tick() => {
                 for member in &mut group.members {
@@ -244,12 +256,17 @@ fn introduce(context: &mut Context, group: &mut Group, from: &Fingerprint, peers
             added = true;
         }
     }
-    if !added {
-        return Ok(());
+    if added {
+        announce_group(context, group, from);
     }
+    Ok(())
+}
+
+/// Bağlı eşlere (`skip` dışındakilere) güncel grup listesini gönderir.
+pub(crate) fn announce_group(context: &Context, group: &mut Group, skip: &Fingerprint) {
     for index in 0..group.members.len() {
         let to = group.members[index].peer.fingerprint;
-        if &to == from {
+        if &to == skip {
             continue;
         }
         let introductions = group.introductions_for(&to);
@@ -260,7 +277,6 @@ fn introduce(context: &mut Context, group: &mut Group, from: &Fingerprint, peers
             disconnect(&context.events, member, &error.to_string());
         }
     }
-    Ok(())
 }
 
 fn disconnect(events: &Emitter, member: &mut Member, reason: &str) {

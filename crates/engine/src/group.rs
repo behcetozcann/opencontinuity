@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use oc_pairing::{Fingerprint, Peer, device_id_of};
 use oc_protocol::{DeviceId, PeerInfo};
-use oc_transport::Trust;
 use tokio::time::Instant;
 
 use crate::Timing;
@@ -121,9 +120,9 @@ impl Group {
         self.members.iter_mut().find(|member| member.link.as_ref().is_some_and(|link| link.id == id))
     }
 
-    /// Bağlantı kabul ederken: gruptaki herhangi bir eş.
-    pub fn trust(&self) -> Trust {
-        Trust::Pinned(self.members.iter().map(|member| member.peer.fingerprint).collect())
+    /// Bağlantı kabul ederken güvenilenler: gruptaki herhangi bir eş.
+    pub fn fingerprints(&self) -> Vec<Fingerprint> {
+        self.members.iter().map(|member| member.peer.fingerprint).collect()
     }
 
     pub fn next_dial(&self) -> Option<Instant> {

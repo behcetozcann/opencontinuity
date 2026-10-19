@@ -23,7 +23,7 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 
 | Mesaj | Alanlar | Not |
 |---|---|---|
-| `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String`, `listen_port: u16`, `pairing: bool` | Bağlantıdaki ilk mesaj; eş sürümü `MIN_PEER_VERSION`'dan eskiyse ya da mod (`pairing`) uyuşmazsa bağlantı kapanır. `listen_port` karşı tarafın geri bağlanacağı port |
+| `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String`, `listen_port: u16`, `pairing: bool` | Bağlantıdaki ilk mesaj; eş sürümü `MIN_PEER_VERSION`'dan eskiyse ya da mod (`pairing`) uyuşmazsa bağlantı kapanır. İki uç önce kendi `Hello`'sunu yazar; yalnız eşleştirme sürerken kabul eden taraf önce eşinkini okuyup aynı modla yanıt verir (gruptaki eş senkrona, yeni cihaz eşleştirmeye; senkron isteyen eş gruptan olmalı). `listen_port` karşı tarafın geri bağlanacağı port |
 | `PairDecision` | `accepted: bool` | Yalnız eşleştirmede; iki uç da `true` göndermeden eş kaydedilmez |
 | `Clock` | `lamport: u64` | `oc run` bağlantısında `Hello`'dan hemen sonra; alan taraf saatini `max(kendi, gelen)` yapar. Yeniden başlayan cihazın ilk kopyası böylece eski görünmez |
 | `Clip` | `event_id: [u8; 16]`, `lamport: u64`, `payload: Text(String) \| Png(Vec<u8>)` | Pano olayı. `Png` PNG imzasıyla başlamalı. Gönderici görselleri bu mesajla değil parçalarla yollar |

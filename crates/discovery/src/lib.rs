@@ -23,18 +23,27 @@ pub struct Found {
 pub struct Discovery {
     daemon: ServiceDaemon,
     own_fingerprint_hex: String,
+    name: String,
+    port: u16,
 }
 
 impl Discovery {
     pub fn start(name: &str, fingerprint: &Fingerprint, port: u16, pairing: bool) -> anyhow::Result<Self> {
-        let daemon = ServiceDaemon::new()?;
-        let fingerprint_hex = hex::encode(fingerprint);
-        let instance = format!("{name} {}", &fingerprint_hex[..8]);
+        let discovery =
+            Self { daemon: ServiceDaemon::new()?, own_fingerprint_hex: hex::encode(fingerprint), name: name.to_owned(), port };
+        discovery.set_pairing(pairing)?;
+        Ok(discovery)
+    }
+
+    /// Yayını eşleştirme işaretiyle yeniler (aynı kayıt, yalnız `pair` değişir).
+    pub fn set_pairing(&self, pairing: bool) -> anyhow::Result<()> {
+        let fingerprint_hex = self.own_fingerprint_hex.as_str();
+        let instance = format!("{} {}", self.name, &fingerprint_hex[..8]);
         let host = format!("oc-{}.local.", &fingerprint_hex[..12]);
-        let properties = [("fp", fingerprint_hex.as_str()), ("name", name), ("pair", if pairing { "1" } else { "0" })];
-        let service = ServiceInfo::new(SERVICE_TYPE, &instance, &host, "", port, &properties[..])?.enable_addr_auto();
-        daemon.register(service)?;
-        Ok(Self { daemon, own_fingerprint_hex: fingerprint_hex })
+        let properties = [("fp", fingerprint_hex), ("name", self.name.as_str()), ("pair", if pairing { "1" } else { "0" })];
+        let service = ServiceInfo::new(SERVICE_TYPE, &instance, &host, "", self.port, &properties[..])?.enable_addr_auto();
+        self.daemon.register(service)?;
+        Ok(())
     }
 
     /// Başka cihazlar çözümlendikçe kanala yazar; kendi yayınımız atlanır.

@@ -1,77 +1,122 @@
-//! İlk eşleştirme: bağlantı → iki ekranda aynı 6 haneli kod → iki uç da
-//! onaylayınca eş kaydedilir. Biri reddederse hiçbir şey kaydedilmez.
+//! Eşleştirme: bağlantı → iki ekranda aynı 6 haneli kod → iki uç da onaylayınca
+//! eş kaydedilir. Biri reddederse hiçbir şey kaydedilmez. Senkron döngüsünün
+//! yanında ayrı görev olarak çalışır; gruptaki bağlantılar bu sırada sürer.
 
 use std::net::SocketAddr;
 
 use anyhow::{anyhow, bail};
-use oc_discovery::Discovery;
+use oc_discovery::Found;
 use oc_pairing::{Identity, Peer, sas_code};
 use oc_protocol::Message;
 use oc_transport::{Session, Trust};
-use tokio::net::TcpListener;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::time::{Instant, sleep_until, timeout};
 
-use crate::events::{Emitter, Event, PairingStage};
+use crate::events::PairingStage;
 use crate::link::{self, Link};
-use crate::{ClipboardPort, Command, Context, EngineConfig, Flow, config, next_found};
+use crate::{EngineConfig, config};
 
-/// Hata olursa `PairingFailed` yayınlanır ve boşta durumuna dönülür.
-pub async fn run(context: &mut Context, address: Option<String>) -> anyhow::Result<Flow> {
-    let result = pair(context, address).await;
-    context.events.update(|snapshot| snapshot.pairing = None);
-    match result {
-        Ok(flow) => Ok(flow),
-        Err(error) => {
-            context.events.emit(Event::PairingFailed { reason: format!("{error:#}") });
-            Ok(Flow::Continue)
-        }
+/// Senkron döngüsünden göreve.
+pub(crate) enum Input {
+    Confirm(bool),
+    Cancel,
+    /// Dinleyicinin kabul ettiği eşleştirme oturumu.
+    Accepted(Box<Session>, SocketAddr),
+    /// mDNS'te eşleştirme modundaki cihaz.
+    Found(Found),
+}
+
+/// Görevden senkron döngüsüne.
+pub(crate) enum Update {
+    Stage(PairingStage),
+    Paired(Peer),
+    Failed(String),
+    Cancelled,
+}
+
+pub(crate) struct Pairing {
+    inputs: UnboundedSender<Input>,
+    pub updates: UnboundedReceiver<Update>,
+}
+
+impl Pairing {
+    /// `address` yoksa aynı ağda eşleştirme modundaki cihaz aranır ve beklenir.
+    pub fn start(config: &EngineConfig, identity: Identity, address: Option<String>) -> Self {
+        let (inputs, input_receiver) = mpsc::unbounded_channel();
+        let (update_sender, updates) = mpsc::unbounded_channel();
+        let settings = Settings::from(config);
+        tokio::spawn(async move {
+            let update = match pair(&settings, &identity, address, input_receiver, &update_sender).await {
+                Ok(Some(peer)) => Update::Paired(peer),
+                Ok(None) => Update::Cancelled,
+                Err(error) => Update::Failed(format!("{error:#}")),
+            };
+            let _ = update_sender.send(update);
+        });
+        Self { inputs, updates }
+    }
+
+    pub fn send(&self, input: Input) {
+        let _ = self.inputs.send(input);
     }
 }
 
-async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<Flow> {
+/// Görevin ihtiyaç duyduğu ayarlar (motorun ayarlarının kopyası).
+struct Settings {
+    port: u16,
+    timing: crate::Timing,
+    files_dir: std::path::PathBuf,
+}
+
+impl From<&EngineConfig> for Settings {
+    fn from(config: &EngineConfig) -> Self {
+        Self { port: config.port, timing: config.timing, files_dir: config.files_dir.clone() }
+    }
+}
+
+async fn pair(
+    settings: &Settings,
+    identity: &Identity,
+    address: Option<String>,
+    mut inputs: UnboundedReceiver<Input>,
+    updates: &UnboundedSender<Update>,
+) -> anyhow::Result<Option<Peer>> {
     let local_ip = config::local_ip().map(|ip| ip.to_string());
-    context.events.update(|snapshot| snapshot.pairing = Some(PairingStage::Searching { local_ip }));
-    let (session, peer_address) = tokio::select! {
-        connected = connect(&context.config, &context.identity, address, context.events.sender()) => connected?,
-        flow = wait_for_cancel(&mut context.commands, &mut context.clipboard, &mut context.events) => return Ok(flow),
+    let _ = updates.send(Update::Stage(PairingStage::Searching { local_ip }));
+    let Some((session, peer_address)) = find_session(settings, identity, address, &mut inputs).await? else {
+        return Ok(None);
     };
 
-    let code = sas_code(&context.identity.fingerprint(), &session.peer_fingerprint, &session.exporter);
+    let code = sas_code(&identity.fingerprint(), &session.peer_fingerprint, &session.exporter);
     let peer = Peer {
         name: session.peer_name.clone(),
         fingerprint: session.peer_fingerprint,
         last_address: Some(peer_address.to_string()),
     };
     let (outlets, mut inlets) = link::channels();
-    let mut link = Link::start(0, session, context.config.timing.heartbeat_timeout, context.config.files_dir.clone(), &outlets);
-    let name = peer.name.clone();
-    context.events.update(|snapshot| snapshot.pairing = Some(PairingStage::Confirm { peer: name, code }));
+    let mut link = Link::start(0, session, settings.timing.heartbeat_timeout, settings.files_dir.clone(), &outlets);
+    let _ = updates.send(Update::Stage(PairingStage::Confirm { peer: peer.name.clone(), code }));
 
     let mut own_accepted = false;
     let mut peer_accepted = false;
     while !(own_accepted && peer_accepted) {
         tokio::select! {
-            command = context.commands.recv() => match command {
-                Some(Command::ConfirmCode(accepted)) if !own_accepted => {
+            input = inputs.recv() => match input {
+                Some(Input::Confirm(accepted)) if !own_accepted => {
                     link.send(Message::PairDecision { accepted }).await?;
                     if !accepted {
                         bail!("eşleştirme reddedildi; hiçbir şey kaydedilmedi");
                     }
                     own_accepted = true;
                     if !peer_accepted {
-                        let name = peer.name.clone();
-                        context.events.update(|snapshot| snapshot.pairing = Some(PairingStage::WaitingPeer { peer: name }));
+                        let _ = updates.send(Update::Stage(PairingStage::WaitingPeer { peer: peer.name.clone() }));
                     }
                 }
-                Some(Command::CancelPairing) => {
-                    context.events.diagnostic("Eşleştirme kullanıcı tarafından iptal edildi (kod onayı aşamasında)");
+                None | Some(Input::Cancel) => {
                     let _ = link.send(Message::PairDecision { accepted: false }).await;
-                    return Ok(Flow::Continue);
+                    return Ok(None);
                 }
-                None | Some(Command::Shutdown) => return Ok(Flow::Shutdown),
-                Some(Command::Pause) => context.events.update(|snapshot| snapshot.paused = true),
-                Some(Command::Resume) => context.events.update(|snapshot| snapshot.paused = false),
+                // Kod onayı sürerken gelen ikinci aday bırakılır.
                 Some(_) => {}
             },
             message = inlets.incoming.recv() => match message.map_or_else(|| Err(anyhow!("okuma görevi bitti")), |(_, message)| message) {
@@ -80,114 +125,77 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
                 Ok(_) => bail!("eş beklenmeyen mesaj gönderdi"),
                 Err(error) => bail!("eşleştirme bağlantısı koptu: {error}"),
             },
-            copy = context.clipboard.local_copies.recv() => {
-                copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
-            }
         }
     }
-    context.store.upsert(&peer)?;
-    context.events.emit(Event::Paired { peer: peer.name });
-    Ok(Flow::Continue)
+    Ok(Some(peer))
 }
 
-/// Adres verilmişse oraya bağlanır. Verilmemişse dinler ve mDNS ile yayın
-/// yapar; eşleştirme modundaki cihaz bulunursa parmak izi küçük olan taraf
-/// bağlanır, diğeri bağlantıyı kabul eder.
-async fn connect(
-    config: &EngineConfig,
+/// Adres verilmişse oraya bağlanır. Verilmemişse dinleyicinin kabul ettiği
+/// oturumu ya da mDNS'te bulunan eşleştirme modundaki cihazı bekler: parmak izi
+/// küçük olan taraf bağlanır; öteki `fallback_delay` içinde bağlantı gelmezse
+/// kendisi arar (gelen bağlantısı güvenlik duvarına takılıyorsa).
+async fn find_session(
+    settings: &Settings,
     identity: &Identity,
     address: Option<String>,
-    diagnostics: UnboundedSender<Event>,
-) -> anyhow::Result<(Session, SocketAddr)> {
-    let diagnostic = |message: String| {
-        let _ = diagnostics.send(Event::Diagnostic { message });
-    };
+    inputs: &mut UnboundedReceiver<Input>,
+) -> anyhow::Result<Option<(Session, SocketAddr)>> {
     if let Some(address) = address {
-        let address = with_default_port(&address, config.port)?;
-        let session = timeout(config.timing.handshake_timeout, oc_transport::connect(address, identity, Trust::Pairing, config.port))
-            .await
-            .map_err(|_| anyhow!("{address} yanıt vermedi"))??;
-        return Ok((session, address));
+        let address = with_default_port(&address, settings.port)?;
+        let attempt = timeout(settings.timing.handshake_timeout, oc_transport::connect(address, identity, Trust::Pairing, settings.port));
+        return tokio::select! {
+            session = attempt => Ok(Some((session.map_err(|_| anyhow!("{address} yanıt vermedi"))??, address))),
+            () = next_cancel(inputs) => Ok(None),
+        };
     }
-    let listener = TcpListener::bind(("0.0.0.0", config.port)).await?;
-    let discovery =
-        if config.discovery { Some(Discovery::start(&identity.name, &identity.fingerprint(), config.port, true)?) } else { None };
-    let mut discovered = discovery.as_ref().map(Discovery::browse).transpose()?;
     let own_hex = hex::encode(identity.fingerprint());
-    // Asıl yönde küçük parmak izli taraf arar; öteki `fallback_delay` içinde
-    // bağlantı gelmezse kendisi arar (gelen bağlantısı güvenlik duvarına takılıyorsa).
     let mut fallback: Option<(Instant, Vec<SocketAddr>)> = None;
     loop {
         let fallback_at = fallback.as_ref().map(|(at, _)| *at);
         tokio::select! {
-            accepted = listener.accept() => {
-                let (tcp, remote) = accepted?;
-                match timeout(config.timing.handshake_timeout, oc_transport::accept(tcp, identity, Trust::Pairing, config.port)).await {
-                    Ok(Ok(session)) => {
-                        let address = SocketAddr::new(remote.ip(), session.peer_listen_port);
-                        return Ok((session, address));
-                    }
-                    Ok(Err(error)) => diagnostic(format!("Reddedilen eşleştirme bağlantısı: {} ({error})", remote.ip())),
-                    Err(_) => diagnostic(format!("Reddedilen eşleştirme bağlantısı: {} (zaman aşımı)", remote.ip())),
-                }
-            }
-            Some(found) = next_found(&mut discovered) => {
-                if !found.pairing {
-                    continue;
-                }
-                if found.fingerprint_hex < own_hex {
+            input = inputs.recv() => match input {
+                None | Some(Input::Cancel) => return Ok(None),
+                Some(Input::Accepted(session, address)) => return Ok(Some((*session, address))),
+                Some(Input::Found(found)) if found.pairing && found.fingerprint_hex < own_hex => {
                     if fallback.is_none() {
-                        fallback = Some((Instant::now() + config.timing.fallback_delay, found.addresses));
+                        fallback = Some((Instant::now() + settings.timing.fallback_delay, found.addresses));
                     }
-                    continue;
                 }
-                if let Some(connected) = dial_pairing(config, identity, &found.addresses).await {
-                    return Ok(connected);
+                Some(Input::Found(found)) if found.pairing => {
+                    if let Some(connected) = dial(settings, identity, &found.addresses).await {
+                        return Ok(Some(connected));
+                    }
                 }
-            }
+                Some(_) => {}
+            },
             _ = sleep_until(fallback_at.unwrap_or_else(Instant::now)), if fallback_at.is_some() => {
                 let Some((at, addresses)) = fallback.as_mut() else { continue };
-                if let Some(connected) = dial_pairing(config, identity, addresses).await {
-                    return Ok(connected);
+                if let Some(connected) = dial(settings, identity, addresses).await {
+                    return Ok(Some(connected));
                 }
-                *at = Instant::now() + config.timing.fallback_delay;
+                *at = Instant::now() + settings.timing.fallback_delay;
             }
         }
     }
 }
 
-async fn dial_pairing(config: &EngineConfig, identity: &Identity, addresses: &[SocketAddr]) -> Option<(Session, SocketAddr)> {
+/// Adresle bağlanırken yalnız iptal dinlenir; diğer girdiler atlanır.
+async fn next_cancel(inputs: &mut UnboundedReceiver<Input>) {
+    while let Some(input) = inputs.recv().await {
+        if matches!(input, Input::Cancel) {
+            return;
+        }
+    }
+}
+
+async fn dial(settings: &Settings, identity: &Identity, addresses: &[SocketAddr]) -> Option<(Session, SocketAddr)> {
     for address in addresses {
-        let attempt = oc_transport::connect(*address, identity, Trust::Pairing, config.port);
-        if let Ok(Ok(session)) = timeout(config.timing.dial_timeout, attempt).await {
+        let attempt = oc_transport::connect(*address, identity, Trust::Pairing, settings.port);
+        if let Ok(Ok(session)) = timeout(settings.timing.dial_timeout, attempt).await {
             return Some((session, *address));
         }
     }
     None
-}
-
-/// Bağlantı kurulana kadar iptal ve kapanış komutlarını dinler.
-async fn wait_for_cancel(
-    commands: &mut UnboundedReceiver<Command>,
-    clipboard: &mut ClipboardPort,
-    events: &mut Emitter,
-) -> Flow {
-    loop {
-        tokio::select! {
-            command = commands.recv() => match command {
-                Some(Command::CancelPairing) => return Flow::Continue,
-                None | Some(Command::Shutdown) => return Flow::Shutdown,
-                Some(Command::Pause) => events.update(|snapshot| snapshot.paused = true),
-                Some(Command::Resume) => events.update(|snapshot| snapshot.paused = false),
-                Some(_) => {}
-            },
-            copy = clipboard.local_copies.recv() => {
-                if copy.is_none() {
-                    return Flow::Shutdown;
-                }
-            }
-        }
-    }
 }
 
 fn with_default_port(address: &str, port: u16) -> anyhow::Result<SocketAddr> {

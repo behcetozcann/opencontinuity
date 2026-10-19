@@ -15,6 +15,7 @@ mod files;
 mod group;
 mod link;
 mod pairing;
+mod pairing_host;
 mod sync_loop;
 mod transfer;
 mod writer;
@@ -23,7 +24,6 @@ use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use oc_discovery::Found;
 use oc_pairing::{Identity, PeerStore};
 use tokio::sync::mpsc;
@@ -169,17 +169,8 @@ impl Engine {
             snapshot.device_name = device_name;
             snapshot.fingerprint_prefix = fingerprint_prefix;
         });
-        let mut flow = Flow::Continue;
-        loop {
-            flow = match flow {
-                Flow::Shutdown => return Ok(()),
-                Flow::Pair { address } => pairing::run(&mut context, address).await?,
-                Flow::Continue => {
-                    let peers = context.store.load_all()?;
-                    if peers.is_empty() { idle(&mut context).await? } else { sync_loop::run(&mut context, peers).await? }
-                }
-            };
-        }
+        let peers = context.store.load_all()?;
+        sync_loop::run(&mut context, peers).await
     }
 }
 
@@ -190,38 +181,6 @@ pub(crate) struct Context {
     clipboard: ClipboardPort,
     commands: mpsc::UnboundedReceiver<Command>,
     events: events::Emitter,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Flow {
-    /// Eş kaydı değişmiş olabilir; durum yeniden belirlenir.
-    Continue,
-    /// Port bırakıldı; eşleştirme başlar.
-    Pair { address: Option<String> },
-    Shutdown,
-}
-
-/// Eş yokken: port kapalı, eşleştirme komutu beklenir.
-async fn idle(context: &mut Context) -> anyhow::Result<Flow> {
-    context.events.update(|snapshot| {
-        snapshot.peers.clear();
-        snapshot.pairing = None;
-    });
-    loop {
-        tokio::select! {
-            command = context.commands.recv() => match command {
-                None | Some(Command::Shutdown) => return Ok(Flow::Shutdown),
-                Some(Command::StartPairing { address }) => return Ok(Flow::Pair { address }),
-                Some(Command::Pause) => context.events.update(|snapshot| snapshot.paused = true),
-                Some(Command::Resume) => context.events.update(|snapshot| snapshot.paused = false),
-                Some(_) => {}
-            },
-            // Eş yokken kopyalar okunup atılır; kanal dolup pano iş parçacığı tıkanmasın.
-            copy = context.clipboard.local_copies.recv() => {
-                copy.ok_or_else(|| anyhow!("pano iş parçacığı durdu"))?;
-            }
-        }
-    }
 }
 
 /// mDNS kapalıysa hiç dönmez.

@@ -52,7 +52,7 @@ Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3
 - Protokol **v6** (`Peers` mesajı): yeni cihaz gruptaki herhangi biriyle kod onaylar, diğerleri bağlantıdaki `Peers` alışverişiyle öğrenir. Tam ağ, aktarma yok. 0.1.7 ile bağlanmaz.
 - `peers.json` (liste + `removed`); `peer.json` ilk yüklemede taşınır. Kaldırma yerel ve kalıcı (tanıtılsa da geri gelmez).
 - Core: pano sürümü `(lamport, gönderen)` — eski "yalnız yerel kopyayla karşılaştır" kuralı 3 cihazda ayrışıyordu (test eski kodda kırmızı). `pending_echo` 4'lük kuyruk.
-- Motor: `group.rs` (eş başına bağlantı/yeniden deneme/bekleyen kopya), `dial.rs` (çevirme ayrı görevde), `link.rs` ortak etiketli kanallar. Eşleştirme sırasında senkron durur.
+- Motor: `group.rs` (eş başına bağlantı/yeniden deneme/bekleyen kopya), `dial.rs` (çevirme ayrı görevde), `link.rs` ortak etiketli kanallar. Eşleştirme (2026-10-19'dan beri) senkronun yanında ayrı görev (`pairing.rs` + `pairing_host.rs`); gruptaki bağlantılar kopmaz. Eşleştirme açıkken dinleyici `Trust::PinnedOrPairing`: önce eşin `Hello`'sunu okur, gruptakini senkrona, yeni cihazı eşleştirmeye alır.
 - Arayüz: grupta cihaz etiketleri, "Son aktarımlar"da kaynak adı, Ayarlar › Cihazlar (kart başına kaldır) + Cihaz ekle. Chrome önizlemesiyle doğrulandı (sahte Tauri: scratchpad `preview1/mock.js`).
 - Gerçek cihaz testi yok: `docs/test-plan.md` M1–M6.
 

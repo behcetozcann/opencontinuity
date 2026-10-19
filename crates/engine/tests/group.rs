@@ -2,8 +2,8 @@ mod common;
 
 use std::time::Duration;
 
-use common::{Node, fast_timing, pair, paired_and_connected, text, unpair};
-use oc_engine::Event;
+use common::{Node, code_of, fast_timing, pair, paired_and_connected, text, unpair};
+use oc_engine::{Command, Event, PairingStage};
 use oc_pairing::PeerStore;
 
 /// Mac–Windows eşli; Linux yalnız Windows'la kod onaylar, Mac onu Windows'tan öğrenir.
@@ -65,4 +65,33 @@ async fn removed_member_is_not_reintroduced_by_others() {
     linux.assert_nothing_written(Duration::from_millis(400)).await;
     let names: Vec<String> = PeerStore::new(mac.dir.path()).load_all().unwrap().into_iter().map(|peer| peer.name).collect();
     assert_eq!(names, ["windows"]);
+}
+
+/// Gruba cihaz eklenirken mevcut bağlantılar kopmaz; kopyalar gitmeye devam eder.
+#[tokio::test]
+async fn adding_device_keeps_existing_connections() {
+    let (mut mac, mut windows) = paired_and_connected().await;
+    let mut linux = Node::start("linux");
+    windows.handle.send(Command::StartPairing { address: None });
+    windows.wait_state(|snapshot| matches!(snapshot.pairing, Some(PairingStage::Searching { .. }))).await;
+    mac.copy.send(text("aranırken")).await.unwrap();
+    assert_eq!(windows.next_written().await, text("aranırken"));
+
+    linux.handle.send(Command::StartPairing { address: Some(format!("127.0.0.1:{}", windows.port)) });
+    assert_eq!(code_of(&mut windows).await, code_of(&mut linux).await);
+    windows.copy.send(text("kod ekranında")).await.unwrap();
+    assert_eq!(mac.next_written().await, text("kod ekranında"));
+    windows.handle.send(Command::ConfirmCode(true));
+    linux.handle.send(Command::ConfirmCode(true));
+    windows.wait_for(|event| matches!(event, Event::Paired { .. })).await;
+    linux.wait_for(|event| matches!(event, Event::Paired { .. })).await;
+
+    while let Ok(event) = mac.events.try_recv() {
+        assert!(!matches!(event, Event::Disconnected { .. }), "Mac–Windows bağlantısı eşleştirme sırasında kopmamalı");
+    }
+    for node in [&mut mac, &mut windows, &mut linux] {
+        node.wait_current(|snapshot| snapshot.connected_count() == 2).await;
+    }
+    linux.copy.send(text("yeni cihazdan")).await.unwrap();
+    assert_eq!(mac.next_written().await, text("yeni cihazdan"));
 }

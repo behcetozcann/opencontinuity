@@ -26,6 +26,8 @@ pub struct Session {
     pub peer_fingerprint: Fingerprint,
     /// Eşin dinlediği port; ona geri bağlanmak için.
     pub peer_listen_port: u16,
+    /// Eşleştirme oturumu mu (senkron değil).
+    pub pairing: bool,
     /// Bu TLS oturumuna özgü anahtar türevi; SAS kodunu oturuma bağlar.
     pub exporter: [u8; 32],
 }
@@ -73,14 +75,18 @@ pub async fn accept(tcp: TcpStream, identity: &Identity, trust: Trust, listen_po
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = ServerConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])?
-        .with_client_cert_verifier(Arc::new(verify::PeerVerifier::new(trust, provider)))
+        .with_client_cert_verifier(Arc::new(verify::PeerVerifier::new(trust.clone(), provider)))
         .with_single_cert(vec![certificate(identity)], private_key(identity))?;
     tcp.set_nodelay(true)?;
     let tls = TlsAcceptor::from(Arc::new(config)).accept(tcp).await?;
     let (fingerprint, exporter) = session_secrets(tls.get_ref().1, |out| {
         tls.get_ref().1.export_keying_material(out, EXPORTER_LABEL, None).map(|_| ())
     })?;
-    hello(TlsStream::from(tls), identity, fingerprint, exporter, Local { pairing, listen_port }).await
+    let stream = TlsStream::from(tls);
+    match trust {
+        Trust::PinnedOrPairing(group) => hello_either(stream, identity, fingerprint, exporter, &group, listen_port).await,
+        _ => hello(stream, identity, fingerprint, exporter, Local { pairing, listen_port }).await,
+    }
 }
 
 fn session_secrets(
@@ -98,6 +104,13 @@ struct Local {
     listen_port: u16,
 }
 
+struct PeerHello {
+    name: String,
+    listen_port: u16,
+    pairing: bool,
+}
+
+/// İki uç önce kendi `Hello`'sunu yazar, sonra karşınınkini okur.
 async fn hello(
     mut stream: Stream,
     identity: &Identity,
@@ -105,28 +118,66 @@ async fn hello(
     exporter: [u8; 32],
     local: Local,
 ) -> anyhow::Result<Session> {
-    let own_pairing = local.pairing;
+    write_hello(&mut stream, identity, &local).await?;
+    let peer = read_hello(&mut stream, &peer_fingerprint).await?;
+    // Eşleşmesi kaldırılmış cihazın eski eşi, eşleştirme bekleyen tarafa bağlanıp
+    // akışı bozmasın (ve tersi).
+    if peer.pairing != local.pairing {
+        bail!("eş {} modunda", if peer.pairing { "eşleştirme" } else { "senkron" });
+    }
+    Ok(session(stream, peer, peer_fingerprint, exporter))
+}
+
+/// Eşleştirme sürerken kabul eden taraf: önce eşin `Hello`'su okunur, mod ona
+/// göre seçilir. Senkron isteyen eş gruptan olmalı; eşleştirme isteyene güven
+/// sonradan kodla (SAS) kurulur.
+async fn hello_either(
+    mut stream: Stream,
+    identity: &Identity,
+    peer_fingerprint: Fingerprint,
+    exporter: [u8; 32],
+    group: &[Fingerprint],
+    listen_port: u16,
+) -> anyhow::Result<Session> {
+    let peer = read_hello(&mut stream, &peer_fingerprint).await?;
+    if !peer.pairing && !group.contains(&peer_fingerprint) {
+        bail!("gruptan olmayan cihaz senkron bağlantısı istedi");
+    }
+    write_hello(&mut stream, identity, &Local { pairing: peer.pairing, listen_port }).await?;
+    Ok(session(stream, peer, peer_fingerprint, exporter))
+}
+
+async fn write_hello(stream: &mut Stream, identity: &Identity, local: &Local) -> anyhow::Result<()> {
     let own = Message::Hello {
         version: VERSION,
         device_id: identity.device_id(),
         name: identity.name.clone(),
         listen_port: local.listen_port,
-        pairing: own_pairing,
+        pairing: local.pairing,
     };
-    write_message(&mut stream, &own).await?;
-    let Message::Hello { version, device_id, name, listen_port, pairing } = read_message(&mut stream).await? else {
+    write_message(stream, &own).await
+}
+
+async fn read_hello(stream: &mut Stream, peer_fingerprint: &Fingerprint) -> anyhow::Result<PeerHello> {
+    let Message::Hello { version, device_id, name, listen_port, pairing } = read_message(stream).await? else {
         bail!("eş Hello ile başlamadı");
     };
     check_peer_version(version)?;
-    if device_id != device_id_of(&peer_fingerprint) {
+    if device_id != device_id_of(peer_fingerprint) {
         bail!("eşin cihaz kimliği sertifikasıyla uyuşmuyor");
     }
-    // Eşleşmesi kaldırılmış cihazın eski eşi, eşleştirme bekleyen tarafa bağlanıp
-    // akışı bozmasın (ve tersi).
-    if pairing != own_pairing {
-        bail!("eş {} modunda", if pairing { "eşleştirme" } else { "senkron" });
+    Ok(PeerHello { name, listen_port, pairing })
+}
+
+fn session(stream: Stream, peer: PeerHello, peer_fingerprint: Fingerprint, exporter: [u8; 32]) -> Session {
+    Session {
+        stream,
+        peer_name: peer.name,
+        peer_fingerprint,
+        peer_listen_port: peer.listen_port,
+        pairing: peer.pairing,
+        exporter,
     }
-    Ok(Session { stream, peer_name: name, peer_fingerprint, peer_listen_port: listen_port, exporter })
 }
 
 /// Daha yeni sürümler kabul edilir (bilmediğimiz mesajlarını atlarız); v6'dan

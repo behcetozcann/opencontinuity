@@ -102,3 +102,27 @@ async fn pinned_server_accepts_any_group_member() {
     assert_eq!(server.unwrap().peer_name, "Linux");
     assert!(client.is_ok());
 }
+
+/// Eşleştirme sürerken kabul eden taraf: gruptaki eş senkrona, yeni cihaz eşleştirmeye girer.
+#[tokio::test]
+async fn pairing_listener_still_accepts_group_for_sync() {
+    let (mac, windows, linux) = (identity("Mac"), identity("Windows"), identity("Linux"));
+    let either = || Trust::PinnedOrPairing(vec![windows.fingerprint()]);
+
+    let (server, client) = pair_up(&mac, &windows, either(), Trust::Pinned(vec![mac.fingerprint()])).await;
+    let (server, client) = (server.unwrap(), client.unwrap());
+    assert!(!server.pairing && !client.pairing, "gruptaki eş senkron oturumu açmalı");
+
+    let (server, client) = pair_up(&mac, &linux, either(), Trust::Pairing).await;
+    let (server, client) = (server.unwrap(), client.unwrap());
+    assert!(server.pairing && client.pairing, "yeni cihaz eşleştirme oturumu açmalı");
+    assert_eq!(server.exporter, client.exporter);
+}
+
+#[tokio::test]
+async fn pairing_listener_rejects_stranger_asking_for_sync() {
+    let (mac, windows, stranger) = (identity("Mac"), identity("Windows"), identity("Yabancı"));
+    let (server, _) =
+        pair_up(&mac, &stranger, Trust::PinnedOrPairing(vec![windows.fingerprint()]), Trust::Pinned(vec![mac.fingerprint()])).await;
+    assert!(server.is_err(), "gruptan olmayan cihaz senkron oturumu açamamalı");
+}

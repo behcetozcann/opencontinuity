@@ -18,6 +18,9 @@ pub enum Trust {
     Pinned(Vec<Fingerprint>),
     /// Eşleştirme: her sertifika kabul edilir, güven sonradan SAS ile kurulur.
     Pairing,
+    /// Yalnız kabul eden taraf, eşleştirme sürerken: her sertifika TLS'ten geçer;
+    /// senkron isteyen eşin parmak izi `Hello`'dan sonra gruba karşı denetlenir.
+    PinnedOrPairing(Vec<Fingerprint>),
 }
 
 #[derive(Debug)]
@@ -33,7 +36,7 @@ impl PeerVerifier {
 
     fn check(&self, certificate: &CertificateDer<'_>) -> Result<(), Error> {
         match &self.trust {
-            Trust::Pairing => Ok(()),
+            Trust::Pairing | Trust::PinnedOrPairing(_) => Ok(()),
             Trust::Pinned(known) if known.contains(&fingerprint_of(certificate)) => Ok(()),
             Trust::Pinned(_) => Err(Error::InvalidCertificate(CertificateError::ApplicationVerificationFailure)),
         }
