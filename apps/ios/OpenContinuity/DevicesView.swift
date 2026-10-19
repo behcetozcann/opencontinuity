@@ -13,7 +13,7 @@ struct DevicesView: View {
                     ForEach(store.peers, id: \.fingerprintPrefix) { peer in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(peer.name)
-                            Text(peer.connected ? "Bağlı · \(peer.address ?? "")" : "Bağlı değil")
+                            Text(peer.connected ? "Bağlı · \(peer.address ?? "")" : (peer.linkError ?? "Bağlı değil"))
                                 .font(.caption).foregroundStyle(.secondary)
                             Text("Parmak izi \(peer.fingerprintPrefix)")
                                 .font(.caption2.monospaced()).foregroundStyle(.tertiary)

@@ -13,11 +13,11 @@ struct Transfer: Identifiable {
     let date = Date()
     var savedTo: URL?
 
-    var summary: String {
+    var contentTitle: String {
         switch content {
-        case .text: return "Metin · \(Transfer.format(bytes))"
-        case .image: return "Görsel · \(Transfer.format(bytes))"
-        case .files: return "\(items) öğe · \(Transfer.format(bytes))"
+        case .text: return "Metin"
+        case .image: return "Görsel"
+        case .files: return items == 1 ? "1 dosya" : "\(items) öğe"
         }
     }
 

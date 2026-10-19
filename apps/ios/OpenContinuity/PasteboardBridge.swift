@@ -1,35 +1,11 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Uygulama öndeyken panoyu izler. iOS arka planda panoya erişim vermez;
-/// uygulamaya dönülünce son kopya gönderilir (iOS bir kez "Yapıştır" izni sorar).
+/// Bilgisayardan gelen metin ve görseli panoya yazar. iPhone'daki kopyalar
+/// gönderilmez: Mac'e Apple'ın Evrensel Pano'su zaten taşıyor.
 @MainActor
-final class PasteboardBridge {
-    var onCopy: ((ClipRecord) -> Void)?
-
-    private var timer: Timer?
-    private let seenKey = "lastSeenChangeCount"
-
-    /// Son işlenen sayaç; uygulama kapanıp açılınca aynı kopya tekrar gitmesin.
-    private var lastSeen: Int {
-        get { UserDefaults.standard.integer(forKey: seenKey) }
-        set { UserDefaults.standard.set(newValue, forKey: seenKey) }
-    }
-
-    func start() {
-        check()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.check() }
-        }
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    func write(_ clip: ClipRecord) {
-        let pasteboard = UIPasteboard.general
+enum PasteboardBridge {
+    static func write(_ clip: ClipRecord) {
         let item: [String: Any]
         switch clip {
         case let .text(text):
@@ -40,28 +16,8 @@ final class PasteboardBridge {
             // Dosyalar Belgeler'e kaydedildi; panoya dosya yazılmaz.
             return
         }
-        // Evrensel Pano gelen içeriği Mac'e geri taşımasın; taşırsa Mac onu yeni
+        // Evrensel Pano gelen içeriği Mac'e taşımasın; taşırsa Mac onu yeni
         // kopya sanıp gruba yeniden gönderir.
-        pasteboard.setItems([item], options: [.localOnly: true])
-        lastSeen = pasteboard.changeCount
-    }
-
-    private func check() {
-        let pasteboard = UIPasteboard.general
-        guard pasteboard.changeCount != lastSeen else { return }
-        lastSeen = pasteboard.changeCount
-        // has* sorguları izin uyarısı göstermez; yalnız içerik varsa okunur.
-        if pasteboard.hasStrings, let text = pasteboard.string, !text.isEmpty {
-            onCopy?(.text(text: text))
-        } else if pasteboard.hasImages, let png = Self.png(from: pasteboard) {
-            onCopy?(.png(data: png))
-        }
-    }
-
-    private static func png(from pasteboard: UIPasteboard) -> Data? {
-        if let data = pasteboard.data(forPasteboardType: UTType.png.identifier) {
-            return data
-        }
-        return pasteboard.image?.pngData()
+        UIPasteboard.general.setItems([item], options: [.localOnly: true])
     }
 }

@@ -10,7 +10,6 @@ final class EngineStore: ObservableObject {
     @Published var notice: String?
     @Published private(set) var pairingFailure: String?
 
-    let pasteboard = PasteboardBridge()
     private(set) var bonjour: Bonjour?
     private var engine: OcEngine?
     private var stopping = false
@@ -18,10 +17,6 @@ final class EngineStore: ObservableObject {
     #if DEBUG
     private var debugPushed = false
     #endif
-
-    init() {
-        pasteboard.onCopy = { [weak self] clip in self?.push(clip) }
-    }
 
     var peers: [PeerRecord] { snapshot?.peers ?? [] }
     var connectedCount: Int { peers.filter(\.connected).count }
@@ -45,7 +40,6 @@ final class EngineStore: ObservableObject {
             engine.bonjourFound(name: found.name, fingerprintHex: found.fingerprint, pairing: found.pairing, addresses: found.addresses)
         }
         bonjour?.start()
-        pasteboard.start()
         #if DEBUG
         // Simülatör testi: `simctl launch … -ocAutoPair YES` (kod kendiliğinden onaylanır).
         if UserDefaults.standard.bool(forKey: "ocAutoPair") { startPairing() }
@@ -54,7 +48,6 @@ final class EngineStore: ObservableObject {
 
     func stop() {
         guard let engine else { return }
-        pasteboard.stop()
         bonjour?.stop()
         bonjour = nil
         engine.shutdown()
@@ -74,7 +67,7 @@ final class EngineStore: ObservableObject {
     func cancelPairing() { engine?.cancelPairing() }
     func unpair(_ peer: PeerRecord) { engine?.unpair(fingerprintPrefix: peer.fingerprintPrefix) }
 
-    func push(_ clip: ClipRecord) {
+    private func push(_ clip: ClipRecord) {
         guard let engine else { return }
         if !engine.pushClip(clip: clip) {
             notice = "Önceki aktarım sürüyor, biraz sonra tekrar deneyin"
@@ -83,22 +76,36 @@ final class EngineStore: ObservableObject {
 
     /// Seçilen dosyaları geçici klasöre kopyalayıp gönderir.
     func send(files urls: [URL]) {
-        let batch = Paths.outgoing.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        var paths: [String] = []
-        do {
-            try FileManager.default.createDirectory(at: batch, withIntermediateDirectories: true)
-            for url in urls {
+        sendBatch { batch in
+            try urls.map { url in
                 let scoped = url.startAccessingSecurityScopedResource()
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 let target = batch.appendingPathComponent(url.lastPathComponent)
                 try FileManager.default.copyItem(at: url, to: target)
-                paths.append(target.path)
+                return target.path
             }
+        }
+    }
+
+    /// Fotoğraflar'dan seçilenleri (uyumlu biçimde, HEIC yerine JPEG) dosya olarak gönderir.
+    func send(photos: [PhotoData]) {
+        sendBatch { batch in
+            try photos.enumerated().map { index, photo in
+                let target = batch.appendingPathComponent("Fotoğraf \(index + 1).\(photo.fileExtension)")
+                try photo.data.write(to: target)
+                return target.path
+            }
+        }
+    }
+
+    private func sendBatch(_ prepare: (URL) throws -> [String]) {
+        let batch = Paths.outgoing.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: batch, withIntermediateDirectories: true)
+            push(.files(paths: try prepare(batch)))
         } catch {
             notice = "Dosya hazırlanamadı: \(error.localizedDescription)"
-            return
         }
-        push(.files(paths: paths))
     }
 
     // MARK: Motordan gelenler

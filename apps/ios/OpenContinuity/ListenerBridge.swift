@@ -17,7 +17,7 @@ final class ListenerBridge: EngineListener, @unchecked Sendable {
     }
 
     func writeClipboard(clip: ClipRecord) {
-        DispatchQueue.main.async { self.store?.pasteboard.write(clip) }
+        DispatchQueue.main.async { PasteboardBridge.write(clip) }
     }
 
     func setAdvertisePairing(pairing: Bool) {

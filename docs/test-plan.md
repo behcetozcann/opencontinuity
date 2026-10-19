@@ -123,9 +123,9 @@ Simülatörde (2026-10-19, sahte panolu `fake_peer` ile) doğrulandı: Bonjour i
 |---|---|---|
 | I1 | Xcode ile kurulum; ilk açılışta Yerel Ağ izni "Eşleştirmeye başla"dan sonra sorulur | [ ] |
 | I2 | Mac'te Ayarlar › Cihaz ekle → iPhone'da Eşleştirmeye başla → kod iki ekranda aynı → gruptaki Windows/Linux iPhone'u kendiliğinden tanır | [ ] |
-| I3 | Uygulama açıkken Mac/Windows/Linux'ta kopyala → iPhone'da yapıştır (Türkçe + emoji); görsel Notlar'a yapıştırılır | [ ] |
-| I4 | Başka uygulamada kopyala → OpenContinuity'ye dön → bilgisayarlarda yapıştır ("Yapıştırmaya izin ver" uyarısı çıkar; Ayarlar › OpenContinuity › Diğer Uygulamalardan Yapıştır = İzin Ver sonrası çıkmaz) | [ ] |
-| I5 | "Yapıştır" düğmesi (sistem PasteButton) uyarısız gönderir | [ ] |
+| I3 | Uygulama açıkken Mac/Windows/Linux'ta kopyala → iPhone'da yapıştır (Türkçe + emoji); görsel Notlar'a yapıştırılır | [ ] Mac → iPhone metin (Türkçe + emoji) 2026-10-19 doğru |
+| I4 | ~~iPhone panosunu gönderme~~ kaldırıldı (2026-10-19): Mac'e Evrensel Pano taşıyor, ikisi birlikte döngü yaptı. iPhone'dan gelen içerik bilgisayarda Evrensel Pano'yla tekrar gruba gitmemeli (iPhone panoya `localOnly` yazar) | [ ] |
+| I5 | Gönder › Fotoğraf: seçilen fotoğraflar JPEG olarak İndirilenler › OpenContinuity'ye düşer | [ ] |
 | I6 | Bilgisayardan klasör kopyala → iPhone'da Dosyalar › iPhone'umda › OpenContinuity altında aynı yapı; satıra uzun bas › "Dosyalar'da göster" | [ ] |
 | I7 | Dosya gönder (Dosyalar'dan birden çok dosya/klasör) → bilgisayarda İndirilenler › OpenContinuity | [ ] |
 | I8 | Arka plana al → bilgisayarlarda iPhone "bağlı değil"; öne getir → birkaç saniyede bağlanır | [ ] |

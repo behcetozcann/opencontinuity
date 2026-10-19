@@ -6,18 +6,21 @@ struct TransferRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                Image(systemName: transfer.content.symbol)
-                    .font(.title3)
-                    .frame(width: 32, height: 32)
-                Image(systemName: transfer.direction == .incoming ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(transfer.direction == .incoming ? Color.blue : Color.green)
-                    .background(Circle().fill(Color(.systemBackground)))
-            }
+            Image(systemName: transfer.content.symbol)
+                .font(.body.weight(.medium))
+                .foregroundStyle(tint)
+                .frame(width: 40, height: 40)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.12)))
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: transfer.direction == .incoming ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(tint)
+                        .background(Circle().fill(Color(.systemBackground)))
+                        .offset(x: 4, y: 4)
+                }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline)
-                Text(transfer.summary).font(.caption).foregroundStyle(.secondary)
+                Text(transfer.contentTitle).font(.subheadline.weight(.medium))
+                Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             if inProgress {
@@ -26,6 +29,8 @@ struct TransferRow: View {
                 Text(transfer.date, style: .time).font(.caption).foregroundStyle(.secondary)
             }
         }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
         .contextMenu {
             if let folder = transfer.savedTo, let url = filesAppURL(folder) {
                 Link(destination: url) { Label("Dosyalar'da göster", systemImage: "folder") }
@@ -33,12 +38,17 @@ struct TransferRow: View {
         }
     }
 
-    private var title: String {
+    private var tint: Color {
+        transfer.direction == .incoming ? .accentColor : .green
+    }
+
+    private var detail: String {
+        let size = Transfer.format(transfer.bytes)
         switch (transfer.direction, inProgress) {
-        case (.incoming, true): return "\(transfer.peer ?? "Eş") cihazından alınıyor"
-        case (.outgoing, true): return "Gönderiliyor"
-        case (.incoming, false): return "\(transfer.peer ?? "Eş") cihazından geldi"
-        case (.outgoing, false): return "Gönderildi"
+        case (.incoming, true): return "\(transfer.peer ?? "Eş") cihazından alınıyor · \(size)"
+        case (.outgoing, true): return "Gönderiliyor · \(size)"
+        case (.incoming, false): return "\(transfer.peer ?? "Eş") · \(size)"
+        case (.outgoing, false): return "Gönderildi · \(size)"
         }
     }
 

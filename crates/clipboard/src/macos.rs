@@ -5,7 +5,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 use objc2::sel;
 use objc2_app_kit::{
-    NSBitmapImageFileType, NSBitmapImageRep, NSPasteboard, NSPasteboardAccessBehavior, NSPasteboardContentsOptions, NSPasteboardTypeFileURL,
+    NSBitmapImageFileType, NSBitmapImageRep, NSPasteboard, NSPasteboardAccessBehavior, NSPasteboardTypeFileURL,
     NSPasteboardItem, NSPasteboardTypePNG, NSPasteboardTypeString, NSPasteboardTypeTIFF,
 };
 use objc2_foundation::{NSArray, NSData, NSDictionary, NSString, NSURL};
@@ -24,13 +24,6 @@ pub struct MacClipboard {
 impl MacClipboard {
     pub fn new() -> Self {
         Self { pasteboard: NSPasteboard::generalPasteboard() }
-    }
-
-    /// Panoyu temizler; yazılacak içerik Evrensel Pano'yla (Handoff) başka Apple
-    /// cihazına taşınmaz. Taşınırsa iPhone'daki uygulama onu yeni kopya sanıp geri
-    /// gönderiyordu (gözlendi: aynı metin 0,5 sn arayla 10 kez döndü).
-    fn clear_for_write(&self) {
-        self.pasteboard.prepareForNewContentsWithOptions(NSPasteboardContentsOptions::CurrentHostOnly);
     }
 
     fn has_sensitive_type(&self) -> bool {
@@ -105,7 +98,7 @@ impl Clipboard for MacClipboard {
     fn write_text(&self, text: &str) -> anyhow::Result<()> {
         // SAFETY: bkz. read.
         let string_type = unsafe { NSPasteboardTypeString };
-        self.clear_for_write();
+        self.pasteboard.clearContents();
         if !self.pasteboard.setString_forType(&NSString::from_str(text), string_type) {
             anyhow::bail!("NSPasteboard metni kabul etmedi");
         }
@@ -115,7 +108,7 @@ impl Clipboard for MacClipboard {
     fn write_png(&self, png: &[u8]) -> anyhow::Result<()> {
         // SAFETY: bkz. read_png.
         let png_type = unsafe { NSPasteboardTypePNG };
-        self.clear_for_write();
+        self.pasteboard.clearContents();
         if !self.pasteboard.setData_forType(Some(&NSData::with_bytes(png)), png_type) {
             anyhow::bail!("NSPasteboard görseli kabul etmedi");
         }
@@ -138,7 +131,7 @@ impl Clipboard for MacClipboard {
             }
             items.push(ProtocolObject::from_retained(item));
         }
-        self.clear_for_write();
+        self.pasteboard.clearContents();
         if !self.pasteboard.writeObjects(&NSArray::from_retained_slice(&items)) {
             anyhow::bail!("NSPasteboard dosyaları kabul etmedi");
         }
