@@ -80,7 +80,9 @@ Sıradaki:
 2. OpenContinuity için açık öneriler: Kaldırılanlar listesi + "X sizi kaldırdı" bildirimi; Windows kod imzası; gelen görseli dosya olarak kaydetme; saklanacak aktarım sayısı ayarı; M1–M6 (iOS uygulamasından sonra).
 3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 
-Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap.
+Simge (2026-10-19, 0.1.11): "satırlı kâğıt" — mavi zemin, iki kâğıt arasında ayırıcı, ön kâğıtta 3 satır. Kaynak `apps/desktop/src-tauri/icons/source/` (`app-icon.svg` → `cargo tauri icon <svg> -o <geçici>` ile üret, yalnız depodaki dosyaları kopyala; `ios-icon.svg` kenara kadar mavi, alfasız 1024 PNG olarak `AppIcon.appiconset/icon-1024.png`; tepsi `python3 tray.py <çıktı>` → `icons/tray/`). Gerçek cihazlarda (Dock, menü çubuğu, Windows tepsisi, iPhone) henüz bakılmadı. Bu Mac'te Simulator.app yok (simctl çalışıyor, ekran görüntüsü `xcrun simctl io <udid> screenshot`).
+
+Açık kalanlar: GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap.
 
 ## Yayın akışı
 
