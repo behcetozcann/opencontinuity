@@ -99,6 +99,7 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 | M4 | Üç cihazda her birinden kopya diğer ikisine gider; "Son aktarımlar"da kaynağın adı görünür | [ ] |
 | M5 | Bir cihaz kapalıyken diğer ikisi senkron sürer; ana ekranda "3 cihazdan 2 tanesi bağlı" | [ ] |
 | M6 | Ayarlar › Cihazlar › Bu cihazı kaldır: o cihazla paylaşım durur, diğerleriyle sürer; uygulamayı yeniden açınca geri gelmez | [ ] |
+| M7 | Cihaz eklerken (eşleştirme açıkken) gruptaki mevcut bağlantılar kopmaz (0.1.9) | [x] 2026-10-19 kullanıcı gerçek cihazda doğruladı |
 
 ## Gerçek cihaz — Linux (Mint, Cinnamon X11, 0.1.8)
 

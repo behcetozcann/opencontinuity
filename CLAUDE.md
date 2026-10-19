@@ -34,7 +34,7 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 
 Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.9** (`main` = etiket v0.1.9, 4b927d1; protokol v6: metin + görsel + dosya/klasör + grup). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ve noterlikli. 0.1.8 numarası yayınlanmadan atlandı. Windows paketi imzasız (SmartScreen "Yine de çalıştır" uyarısı; öneri Azure Trusted Signing, kullanıcı karar vermedi).
 
-0.1.9 gerçek cihazda (Mac + Windows + DentOs Linux Mint) L1–L7 geçti; "cihaz eklerken bağlantılar kopmaz" düzeltmesi gerçek cihazda henüz denenmedi. Test paketlerine bundan sonra ön sürüm numarası verilecek (ör. `0.1.10-test.1`), aynı numara güncelleyiciyle gelmiyor.
+0.1.9 gerçek cihazda (Mac + Windows + DentOs Linux Mint) L1–L7 geçti; "cihaz eklerken bağlantılar kopmaz" düzeltmesi de gerçek cihazda doğrulandı (M7). Test paketlerine bundan sonra ön sürüm numarası verilecek (ör. `0.1.10-test.1`), aynı numara güncelleyiciyle gelmiyor.
 
 Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 - Görsel panosu (0.1.3, v4): PNG, ≤ 32 MiB, 256 KiB parçalar. macOS `public.png`/TIFF→PNG; Windows `PNG` biçimi (IEND'e göre kırpılır) / CF_DIB→PNG, yazarken PNG + CF_DIB. Metin + görsel birlikteyse metin gider.
@@ -66,7 +66,7 @@ Kararsız testler (2026-10-19, çözüldü): yük altında bir uç el sıkışma
 
 Sıradaki:
 1. Kullanıcı yeni oturumda yeni iş başlatacak (muhtemelen iOS uygulaması) — ne istediğini sor.
-2. OpenContinuity için açık öneriler: Kaldırılanlar listesi + "X sizi kaldırdı" bildirimi; Windows kod imzası; gelen görseli dosya olarak kaydetme; saklanacak aktarım sayısı ayarı; 0.1.9'da "cihaz eklerken kopmama"yı gerçek cihazda denemek; M1–M6.
+2. OpenContinuity için açık öneriler: Kaldırılanlar listesi + "X sizi kaldırdı" bildirimi; Windows kod imzası; gelen görseli dosya olarak kaydetme; saklanacak aktarım sayısı ayarı; M1–M6 (iOS uygulamasından sonra).
 3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap.
