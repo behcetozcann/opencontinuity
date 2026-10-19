@@ -68,7 +68,14 @@ fn hold(clipboard: &dyn oc_clipboard::Clipboard) {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+/// macOS ilk öğeden sonrakileri yazan süreçten sonradan alır; süreç hemen
+/// çıkarsa kaybolurlar (ayrı süreçten okumada 10 denemede 7 kez tek öğe).
+#[cfg(target_os = "macos")]
+fn hold(_clipboard: &dyn oc_clipboard::Clipboard) {
+    sleep(Duration::from_secs(1));
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn hold(_clipboard: &dyn oc_clipboard::Clipboard) {}
 
 /// İçeriği asla göstermez: yalnız uzunluk ve hash öneki.
