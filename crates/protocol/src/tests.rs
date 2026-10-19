@@ -162,3 +162,20 @@ fn oversized_group_is_rejected() {
     let long_name = PeerInfo { name: "a".repeat(257), ..peer };
     assert!(encode(&Message::Peers { peers: vec![long_name] }).is_err());
 }
+
+/// Daha yeni sürümün eklediği mesaj bağlantıyı koparmaz: atlanır, sonraki mesaj okunur.
+#[tokio::test]
+async fn message_from_newer_version_is_skipped() {
+    let unknown_body = [KNOWN_MESSAGES as u8, 1, 2, 3];
+    let mut stream = (unknown_body.len() as u32).to_be_bytes().to_vec();
+    stream.extend_from_slice(&unknown_body);
+    stream.extend(encode(&clip("sonraki")).unwrap());
+    assert_eq!(text_of(read_message(&mut stream.as_slice()).await.unwrap()), "sonraki");
+}
+
+/// `KNOWN_MESSAGES` son mesajla birlikte güncellenmeli; yoksa yeni mesaj atlanır.
+#[test]
+fn known_message_count_matches_last_variant() {
+    let body = postcard::to_stdvec(&Message::Peers { peers: Vec::new() }).unwrap();
+    assert_eq!(u32::from(body[0]) + 1, KNOWN_MESSAGES);
+}

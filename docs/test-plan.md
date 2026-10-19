@@ -106,13 +106,13 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 
 | # | Senaryo | Sonuç |
 |---|---|---|
-| L1 | `.deb` çift tıkla kurulur; menüden açılır; tepside (sağ altta) simge ve menüsü görünür | [ ] |
-| L2 | Gruba katılım: Linux'ta Eşleştirmeye başla, Mac'te Ayarlar › Cihaz ekle → kod → Windows da Linux'u kendiliğinden tanır | [ ] |
-| L3 | Metin: Xed / Firefox'ta kopyala ↔ Mac ve Windows'ta yapıştır (Türkçe + emoji, çok satır) | [ ] |
-| L4 | Görsel: Mint ekran görüntüsü "panoya kopyala" → Mac/Windows; Mac'ten gelen görsel GIMP/LibreOffice'e yapıştırılır | [ ] |
-| L5 | Dosya: Nemo'da Ctrl+C → Mac Finder / Windows Gezgin'e yapıştır; tersi Nemo'ya Ctrl+V ile gelir | [ ] |
-| L6 | Oturumu kapat/aç: kendiliğinden başlar (`~/.config/autostart/OpenContinuity.desktop`) ve bağlanır | [ ] |
-| L7 | Parola yöneticisinden (KeePassXC) kopya gönderilmez | [ ] |
+| L1 | `.deb` çift tıkla kurulur; menüden açılır; tepside (sağ altta) simge ve menüsü görünür | [x] 2026-10-19 DentOs (Mint 22.3 Cinnamon, MacBook Air), 0.1.8 test-5720307 |
+| L2 | Gruba katılım: Linux'ta Eşleştirmeye başla, Mac'te Ayarlar › Cihaz ekle → kod → Windows da Linux'u kendiliğinden tanır | [x] 2026-10-19 — ilk denemede Mac'te "Kodlar aynı"dan 0,2 sn sonra Vazgeç'e düşüp iptal oldu (düzeltildi, yeniden denenecek); Linux önce onaylayınca geçti, Windows'a 5 sn'de bağlandı |
+| L3 | Metin: Xed / Firefox'ta kopyala ↔ Mac ve Windows'ta yapıştır (Türkçe + emoji, çok satır) | [x] 2026-10-19 üç cihaz, iki yön |
+| L4 | Görsel: Mint ekran görüntüsü "panoya kopyala" → Mac/Windows; Mac'ten gelen görsel GIMP/LibreOffice'e yapıştırılır | [x] 2026-10-19 LibreOffice'e yapıştı; Nemo/masaüstü görsel verisini dosyaya çevirmez (beklenen) |
+| L5 | Dosya: Nemo'da Ctrl+C → Mac Finder / Windows Gezgin'e yapıştır; tersi Nemo'ya Ctrl+V ile gelir | [x] 2026-10-19 Linux → Mac 3 öğe 17 MB, Mac Finder → Linux 3 öğe; Windows'a da |
+| L6 | Oturumu kapat/aç: kendiliğinden başlar (`~/.config/autostart/OpenContinuity.desktop`) ve bağlanır | [x] 2026-10-19 5 sn'de iki eşe bağlandı; kopukken yapılan Mac kopyası bağlanınca gitti |
+| L7 | Parola yöneticisinden (KeePassXC) kopya gönderilmez | [x] 2026-10-19 `gizli/geçici, atlandı` (x-kde-passwordManagerHint); Mac panosunda parola yok |
 
 ## Bulgular
 

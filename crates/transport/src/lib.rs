@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use oc_pairing::{CERT_NAME, Fingerprint, Identity, device_id_of, fingerprint_of};
-use oc_protocol::{Message, VERSION, read_message, write_message};
+use oc_protocol::{MIN_PEER_VERSION, Message, VERSION, read_message, write_message};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
 use rustls::{ClientConfig, CommonState, ServerConfig};
 use tokio::io::{ReadHalf, WriteHalf};
@@ -117,9 +117,7 @@ async fn hello(
     let Message::Hello { version, device_id, name, listen_port, pairing } = read_message(&mut stream).await? else {
         bail!("eş Hello ile başlamadı");
     };
-    if version != VERSION {
-        bail!("protokol sürümü uyuşmuyor: eş {version}, biz {VERSION}");
-    }
+    check_peer_version(version)?;
     if device_id != device_id_of(&peer_fingerprint) {
         bail!("eşin cihaz kimliği sertifikasıyla uyuşmuyor");
     }
@@ -131,10 +129,32 @@ async fn hello(
     Ok(Session { stream, peer_name: name, peer_fingerprint, peer_listen_port: listen_port, exporter })
 }
 
+/// Daha yeni sürümler kabul edilir (bilmediğimiz mesajlarını atlarız); v6'dan
+/// eski sürümler sürüm farkını tolere etmediği için bağlanamaz.
+fn check_peer_version(version: u16) -> anyhow::Result<()> {
+    if version < MIN_PEER_VERSION {
+        bail!("eş eski bir sürüm kullanıyor (protokol {version}, en az {MIN_PEER_VERSION}); o cihazda OpenContinuity'yi güncelleyin");
+    }
+    Ok(())
+}
+
 fn certificate(identity: &Identity) -> CertificateDer<'static> {
     CertificateDer::from(identity.cert_der.clone())
 }
 
 fn private_key(identity: &Identity) -> PrivateKeyDer<'static> {
     PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.key_der.clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn newer_peers_connect_older_get_clear_error() {
+        assert!(check_peer_version(VERSION).is_ok());
+        assert!(check_peer_version(VERSION + 1).is_ok());
+        let error = check_peer_version(5).unwrap_err().to_string();
+        assert!(error.contains("güncelleyin"), "{error}");
+    }
 }

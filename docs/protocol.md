@@ -1,6 +1,6 @@
 # Protokol v6 (taslak)
 
-v6 (2026-10-18): çoklu cihaz — `Peers` mesajı (grup tanıtma). v5 (2026-10-18): dosya/klasör aktarımı (`FilesStart` + `FileChunk`), süren aktarımı bırakan `TransferCancel`. v4 (2026-10-18): `Clip` metin ya da PNG taşır (`payload`); görseller `ImageStart` + `ImageChunk` parçalarıyla gider. v3 (2026-10-17): `Hello`'ya `listen_port` ve `pairing` eklendi; eşleştirme modundaki uç yalnız eşleştirme modundaki uçla konuşur. v2: `Clock` mesajı eklendi. Sürüm `Hello` içinde karşılaştırılır; uyuşmazsa bağlantı açık bir hatayla kapanır.
+v6 (2026-10-18): çoklu cihaz — `Peers` mesajı (grup tanıtma). v5 (2026-10-18): dosya/klasör aktarımı (`FilesStart` + `FileChunk`), süren aktarımı bırakan `TransferCancel`. v4 (2026-10-18): `Clip` metin ya da PNG taşır (`payload`); görseller `ImageStart` + `ImageChunk` parçalarıyla gider. v3 (2026-10-17): `Hello`'ya `listen_port` ve `pairing` eklendi; eşleştirme modundaki uç yalnız eşleştirme modundaki uçla konuşur. v2: `Clock` mesajı eklendi. Sürüm `Hello` içinde bildirilir. v6'dan itibaren eş sürümü en az `MIN_PEER_VERSION` (6) ise bağlanılır: mevcut mesajların alanları (özellikle `Hello`) hiç değişmez, yeni mesajlar `Message`'ın sonuna eklenir ve bilinmeyen sıra numaralı mesaj okunurken atlanır. Yeni mesajı gönderen taraf, eşin sürümü onu bilmiyorsa göndermez. v5 ve öncesi aynı sürümü şart koştuğu için v6 ile bağlanamaz; hata "o cihazı güncelleyin" der.
 
 ## Taşıma
 
@@ -23,7 +23,7 @@ Karşılıklı kimlik doğrulamalı TLS 1.3 üzerinde tek TCP bağlantısı; var
 
 | Mesaj | Alanlar | Not |
 |---|---|---|
-| `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String`, `listen_port: u16`, `pairing: bool` | Bağlantıdaki ilk mesaj; sürüm ya da mod (`pairing`) uyuşmazsa bağlantı kapanır. `listen_port` karşı tarafın geri bağlanacağı port |
+| `Hello` | `version: u16`, `device_id: [u8; 16]`, `name: String`, `listen_port: u16`, `pairing: bool` | Bağlantıdaki ilk mesaj; eş sürümü `MIN_PEER_VERSION`'dan eskiyse ya da mod (`pairing`) uyuşmazsa bağlantı kapanır. `listen_port` karşı tarafın geri bağlanacağı port |
 | `PairDecision` | `accepted: bool` | Yalnız eşleştirmede; iki uç da `true` göndermeden eş kaydedilmez |
 | `Clock` | `lamport: u64` | `oc run` bağlantısında `Hello`'dan hemen sonra; alan taraf saatini `max(kendi, gelen)` yapar. Yeniden başlayan cihazın ilk kopyası böylece eski görünmez |
 | `Clip` | `event_id: [u8; 16]`, `lamport: u64`, `payload: Text(String) \| Png(Vec<u8>)` | Pano olayı. `Png` PNG imzasıyla başlamalı. Gönderici görselleri bu mesajla değil parçalarla yollar |

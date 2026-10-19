@@ -1,4 +1,5 @@
 //! Protokol v6: `u32` (big-endian) uzunluk + postcard ile kodlanmış [`Message`].
+//! Uyum kuralı: mevcut mesajların alanları değişmez, yeni mesaj yalnız sona eklenir.
 //! Ayrıntı: `docs/protocol.md`.
 
 mod chunks;
@@ -14,6 +15,12 @@ pub use files::{FileEntry, FileList, MAX_FILE_ENTRIES, MAX_FILES_BYTES, portable
 pub use payload::{Chunk, ContentKind, PNG_SIGNATURE, Payload};
 
 pub const VERSION: u16 = 6;
+/// Bağlanılabilen en eski eş sürümü. v6'dan itibaren sürümler birbirine
+/// bağlanır: yeni mesajlar yalnız sona eklenir, eskisi bilmediğini atlar.
+pub const MIN_PEER_VERSION: u16 = 6;
+/// `Message`'taki mesaj sayısı; bundan büyük sıra numaralı mesaj daha yeni
+/// bir sürümündür.
+const KNOWN_MESSAGES: u32 = 12;
 pub const MAX_FRAME_BYTES: usize = 5 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 /// Görseller parça parça gönderildiği için çerçeve sınırından büyük olabilir.
@@ -94,14 +101,32 @@ pub async fn write_message<W: AsyncWrite + Unpin>(writer: &mut W, message: &Mess
 }
 
 pub async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> anyhow::Result<Message> {
-    let length = reader.read_u32().await? as usize;
-    // Uzunluk doğrulanmadan bellek ayrılmaz.
-    if length > MAX_FRAME_BYTES {
-        bail!("çerçeve çok büyük: {length} bayt");
+    loop {
+        let length = reader.read_u32().await? as usize;
+        // Uzunluk doğrulanmadan bellek ayrılmaz.
+        if length > MAX_FRAME_BYTES {
+            bail!("çerçeve çok büyük: {length} bayt");
+        }
+        let mut body = vec![0; length];
+        reader.read_exact(&mut body).await?;
+        // Daha yeni sürümün eklediği mesaj atlanır; bağlantı sürer.
+        if message_index(&body).is_some_and(|index| index >= KNOWN_MESSAGES) {
+            continue;
+        }
+        return decode_body(&body);
     }
-    let mut body = vec![0; length];
-    reader.read_exact(&mut body).await?;
-    decode_body(&body)
+}
+
+/// postcard mesajın sıra numarasını gövdenin başına varint olarak yazar.
+fn message_index(body: &[u8]) -> Option<u32> {
+    let mut index: u32 = 0;
+    for (position, byte) in body.iter().take(5).enumerate() {
+        index |= u32::from(byte & 0x7f) << (7 * position);
+        if byte & 0x80 == 0 {
+            return Some(index);
+        }
+    }
+    None
 }
 
 fn validate(message: &Message) -> anyhow::Result<()> {
