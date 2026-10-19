@@ -65,6 +65,7 @@ async fn pair(context: &mut Context, address: Option<String>) -> anyhow::Result<
                     }
                 }
                 Some(Command::CancelPairing) => {
+                    context.events.diagnostic("Eşleştirme kullanıcı tarafından iptal edildi (kod onayı aşamasında)");
                     let _ = link.send(Message::PairDecision { accepted: false }).await;
                     return Ok(Flow::Continue);
                 }

@@ -51,14 +51,6 @@ export function bindOnboarding() {
   $("ob-no").addEventListener("click", () => answer(false));
 }
 
-// "Kodlar aynı"ya çift tıklamanın ikincisi, aynı yere gelen Vazgeç'e düşüp
-// eşleştirmeyi iptal ediyordu (Mac'te onaydan 0,2 sn sonra iptal).
-function holdWaitingCancel() {
-  const cancel = $("ob-waiting-cancel");
-  cancel.disabled = true;
-  setTimeout(() => (cancel.disabled = false), 800);
-}
-
 export function renderOnboarding({ view, ui }) {
   const snapshot = view.snapshot;
   const step = currentStep(view, ui);
@@ -69,7 +61,6 @@ export function renderOnboarding({ view, ui }) {
     $("ob-start").disabled = false;
     $("ob-yes").disabled = false;
     $("ob-no").disabled = false;
-    if (step === "waiting") holdWaitingCancel();
   }
   const pairing = snapshot.pairing || {};
   renderDevices($("ob-devices"), { selfName: snapshot.device_name, peerName: null, state: "idle" });
