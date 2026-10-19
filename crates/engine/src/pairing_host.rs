@@ -1,21 +1,21 @@
 //! Senkron döngüsünün eşleştirme görevini yönetmesi: başlatma, girdileri
 //! iletme ve sonucu gruba uygulama.
 
-use oc_discovery::Discovery;
 use oc_transport::Trust;
 
 use crate::Context;
+use crate::advertise::Advertiser;
 use crate::events::Event;
 use crate::group::Group;
 use crate::pairing::{Input, Pairing, Update};
 use crate::sync_loop::announce_group;
 
 /// Eşleştirme zaten sürüyorsa yenisi başlamaz.
-pub(crate) fn start(context: &mut Context, discovery: Option<&Discovery>, pairing: &mut Option<Pairing>, address: Option<String>) {
+pub(crate) fn start(context: &mut Context, advertiser: &Advertiser, pairing: &mut Option<Pairing>, address: Option<String>) {
     if pairing.is_some() {
         return;
     }
-    set_discovery_pairing(context, discovery, true);
+    set_discovery_pairing(context, advertiser, true);
     *pairing = Some(Pairing::start(&context.config, context.identity.clone(), address));
 }
 
@@ -41,7 +41,7 @@ pub(crate) async fn next_update(pairing: &mut Option<Pairing>) -> Option<Update>
 pub(crate) fn apply(
     context: &mut Context,
     group: &mut Group,
-    discovery: Option<&Discovery>,
+    advertiser: &Advertiser,
     pairing: &mut Option<Pairing>,
     update: Update,
 ) -> anyhow::Result<()> {
@@ -52,17 +52,17 @@ pub(crate) fn apply(
         }
         Update::Paired(peer) => peer,
         Update::Failed(reason) => {
-            finish(context, discovery, pairing);
+            finish(context, advertiser, pairing);
             context.events.emit(Event::PairingFailed { reason });
             return Ok(());
         }
         Update::Cancelled => {
-            finish(context, discovery, pairing);
+            finish(context, advertiser, pairing);
             context.events.diagnostic("Eşleştirme kullanıcı tarafından iptal edildi");
             return Ok(());
         }
     };
-    finish(context, discovery, pairing);
+    finish(context, advertiser, pairing);
     context.store.upsert(&peer)?;
     context.events.emit(Event::Paired { peer: peer.name.clone() });
     let fingerprint = peer.fingerprint;
@@ -74,16 +74,14 @@ pub(crate) fn apply(
     Ok(())
 }
 
-fn finish(context: &mut Context, discovery: Option<&Discovery>, pairing: &mut Option<Pairing>) {
+fn finish(context: &mut Context, advertiser: &Advertiser, pairing: &mut Option<Pairing>) {
     *pairing = None;
-    set_discovery_pairing(context, discovery, false);
+    set_discovery_pairing(context, advertiser, false);
     context.events.update(|snapshot| snapshot.pairing = None);
 }
 
-fn set_discovery_pairing(context: &Context, discovery: Option<&Discovery>, on: bool) {
-    if let Some(discovery) = discovery
-        && let Err(error) = discovery.set_pairing(on)
-    {
+fn set_discovery_pairing(context: &Context, advertiser: &Advertiser, on: bool) {
+    if let Err(error) = advertiser.set_pairing(on) {
         context.events.diagnostic(format!("mDNS yayını güncellenemedi: {error:#}"));
     }
 }

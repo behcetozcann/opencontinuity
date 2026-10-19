@@ -1,0 +1,24 @@
+[package]
+name = "oc-ffi"
+description = "iOS kabuğu için motorun Swift bağları (UniFFI)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "opencontinuity_core"
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+oc-engine = { path = "../engine" }
+hex = "0.4"
+oc-pairing = { path = "../pairing" }
+tokio.workspace = true
+uniffi = { version = "0.32", features = ["cli"] }
+
+[lints]
+workspace = true

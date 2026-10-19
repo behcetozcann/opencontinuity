@@ -6,7 +6,7 @@ use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
 use oc_engine::{
-    Clip, ClipboardPort, ClipboardSource, Command, Engine, EngineConfig, Event, Handle, PairingStage, Snapshot, Timing,
+    Clip, ClipboardPort, ClipboardSource, Command, DiscoveryMode, Engine, EngineConfig, Event, Handle, PairingStage, Snapshot, Timing,
 };
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -62,6 +62,10 @@ impl Node {
 
     /// Yeniden başlatmayı taklit eder: aynı dizin ve port, istenen zamanlama.
     pub fn start_at(name: &str, dir: tempfile::TempDir, port: u16, timing: Timing) -> Self {
+        Self::start_with(name, dir, port, timing, DiscoveryMode::Off)
+    }
+
+    pub fn start_with(name: &str, dir: tempfile::TempDir, port: u16, timing: Timing, discovery: DiscoveryMode) -> Self {
         let files = tempfile::tempdir().unwrap();
         let (copy, local_copies) = mpsc::channel(8);
         let (writes, written) = std_mpsc::channel();
@@ -69,7 +73,7 @@ impl Node {
             config_dir: dir.path().to_path_buf(),
             device_name: name.to_owned(),
             port,
-            discovery: false,
+            discovery,
             timing,
             files_dir: files.path().to_path_buf(),
         };

@@ -14,13 +14,20 @@ cargo clippy --target x86_64-unknown-linux-gnu -p oc-clipboard --all-targets -- 
 cd apps/desktop/src-tauri && cargo tauri build --bundles app,dmg                          # macOS paketi (yerel, imzasız; yayın CI'dan)
 # Windows installer: msvc + cargo-xwin (gnu hedefi WebView2Loader.dll'e bağımlı kalıyor, kullanıcıda 'bulunamadı' hatası verdi)
 cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
+# iOS: Rust çekirdeği + UniFFI Swift bağları → apps/ios/Core (xcode-select CLT'de; betik DEVELOPER_DIR verir)
+scripts/build-ios-core.sh [debug]
+cd apps/ios && xcodegen && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project OpenContinuity.xcodeproj -scheme OpenContinuity -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+OC_CONFIG_DIR=<dizin> OC_PORT=47810 cargo run -p oc-engine --example fake_peer   # sistem panosuna dokunmayan test eşi (stdin: pair, e, text …, png …, files …)
 ```
+
+`cargo fmt` çalıştırma: depo varsayılan rustfmt genişliğinde değil, tüm dosyaları yeniden biçimliyor.
 
 ## Yapı
 
 - `crates/engine` → senkron motoru (eşleştirme + gruptaki eşlerle senkron döngüsü, olay/komut API'si); CLI ve masaüstü bunu kullanır
 - `apps/cli` → `oc` binary'si (teşhis aracı)
 - `apps/desktop` → Tauri 2 uygulaması (`src-tauri/` Rust, `ui/` derleme adımsız HTML/JS)
+- `apps/ios` → SwiftUI uygulaması (XcodeGen `project.yml`; `.xcodeproj` ve `Core/` üretilir, depoda yok). Motoru `crates/ffi` (UniFFI) ile kullanır; pano `ClipboardSource::Port`, keşif Swift Bonjour'u → `DiscoveryMode::External` (iOS'ta ham multicast için Apple yetkisi gerekir). Simülatör portu 47801 (Mac'teki uygulama 47800'ü tutar).
 - `crates/<ad>` → kütüphaneler; her yeni crate `Cargo.toml` `members` listesine eklenir (glob boş eşleşirse cargo hata verir)
 
 ## Kurallar
@@ -64,8 +71,10 @@ Yedek arama (2026-10-19, `multi-device`): bağlantıyı asıl yönde küçük pa
 
 Kararsız testler (2026-10-19, çözüldü): yük altında bir uç el sıkışmayı zaman aşımıyla bırakırken öteki tamamlayıp kısa süre "bağlı" görünüyor (üretimde EOF ile kendini düzeltir). Testler artık `Node::wait_current` (son durum, kuyruktaki eski durum değil) ile iki ucu bekler, `Node::stop` motorun bitmesini bekler. Yerel yük testi: aynı anda 12 süreç → 2/240; izlenen tek hata `free_port` çakışması (test altyapısı).
 
+iOS Faz 1 (2026-10-19, `ios` dalı, plan: araştırma `docs/ios-research.md`): uygulama açıkken iki yönlü metin/PNG/dosya senkronu, 6 haneli eşleştirme, Cihazlar/kaldır, Dosya gönder, gelen dosyalar Belgeler'de (Dosyalar uygulamasında görünür). Simülatörde doğrulandı (test planı "iOS" bölümü); gerçek iPhone'da denenmedi (I1–I8). Simülatör pano eşitlemesi kapatıldı (`defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false`) — açıkken test içeriği Mac'teki gerçek uygulamaya, oradan gruba gider. DEBUG başlatma argümanları: `-ocAutoPair YES`, `-ocPushText <metin>`.
+
 Sıradaki:
-1. Kullanıcı yeni oturumda yeni iş başlatacak (muhtemelen iOS uygulaması) — ne istediğini sor.
+1. iOS: gerçek iPhone'da I1–I8 (Xcode ile kablolu kurulum, Team LKD3F8VA6H). Sonra Faz 2: Paylaş uzantısı, App Intents (Gönder / Sonuncuyu Al), protokol v7 `FetchLatest` + masaüstü 0.1.10. Faz 3: QR eşleştirme, `BGContinuedProcessingTask`, AB DMA talebi.
 2. OpenContinuity için açık öneriler: Kaldırılanlar listesi + "X sizi kaldırdı" bildirimi; Windows kod imzası; gelen görseli dosya olarak kaydetme; saklanacak aktarım sayısı ayarı; M1–M6 (iOS uygulamasından sonra).
 3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 

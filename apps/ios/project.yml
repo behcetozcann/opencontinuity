@@ -1,0 +1,43 @@
+# Xcode projesi bundan üretilir: `cd apps/ios && xcodegen`.
+# Önce çekirdek: `scripts/build-ios-core.sh`.
+name: OpenContinuity
+options:
+  bundleIdPrefix: org.opencontinuity
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: LKD3F8VA6H
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  OpenContinuity:
+    type: application
+    platform: iOS
+    sources:
+      - OpenContinuity
+      - Core/opencontinuity_core.swift
+    dependencies:
+      - framework: Core/OpenContinuityCore.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.opencontinuity.ios
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: OpenContinuity
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: Gelen görselleri Fotoğraflar'a kaydetmek için.
+        OTHER_LDFLAGS: -lc++
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+    info:
+      path: OpenContinuity/Info.plist
+      properties:
+        NSBonjourServices:
+          - _opencontinuity._tcp
+        NSLocalNetworkUsageDescription: Eşleştirdiğiniz bilgisayarları yerel ağda bulup doğrudan bağlanmak için. Verileriniz internete gönderilmez.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true

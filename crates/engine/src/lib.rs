@@ -7,6 +7,7 @@
 //! kaldırılınca tekrar boşta. Senkrondayken `StartPairing` gruba yeni cihaz
 //! ekler; eşleştirme süresince senkron durur.
 
+mod advertise;
 mod clipboard_thread;
 pub mod config;
 mod dial;
@@ -24,11 +25,12 @@ use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
-use oc_discovery::Found;
 use oc_pairing::{Identity, PeerStore};
 use tokio::sync::mpsc;
 
+pub use advertise::{DiscoveryMode, ExternalDiscovery};
 pub use events::{Event, PairingStage, PeerSummary, Snapshot};
+pub use oc_discovery::Found;
 pub use oc_protocol::ContentKind;
 
 #[derive(Debug, Clone, Copy)]
@@ -65,8 +67,8 @@ pub struct EngineConfig {
     pub config_dir: PathBuf,
     pub device_name: String,
     pub port: u16,
-    /// mDNS yayını ve arama (testlerde kapalı).
-    pub discovery: bool,
+    /// Cihaz yayını ve arama; testlerde kapalı, iOS'ta kabuğun Bonjour'u.
+    pub discovery: DiscoveryMode,
     pub timing: Timing,
     /// Gelen dosyaların kaydedildiği klasör (İndirilenler/OpenContinuity).
     pub files_dir: PathBuf,
@@ -79,7 +81,7 @@ impl EngineConfig {
             config_dir: config::default_dir()?,
             device_name: config::device_name(),
             port: config::port()?,
-            discovery: true,
+            discovery: DiscoveryMode::Mdns,
             timing: Timing::default(),
             files_dir: config::files_dir()?,
         })

@@ -5,7 +5,6 @@ use std::net::SocketAddr;
 
 use anyhow::{Context as _, anyhow};
 use oc_core::SyncState;
-use oc_discovery::Discovery;
 use oc_pairing::{Fingerprint, Peer};
 use oc_protocol::Message;
 use oc_transport::Session;
@@ -17,6 +16,7 @@ use crate::events::{Emitter, Event};
 use crate::group::{Group, Member};
 use crate::link::{self, Link, LinkId};
 use crate::pairing::{Input, Pairing};
+use crate::advertise::{Advertiser, DiscoveryMode};
 use crate::{Command, Context, files, next_found, pairing_host, transfer};
 
 /// Eş olmasa da çalışır (dinleyici ve keşif açık); eşleştirme de burada,
@@ -31,8 +31,8 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<()> 
     let listener = TcpListener::bind(("0.0.0.0", port)).await.with_context(|| {
         format!("port {port} başka bir program tarafından kullanılıyor (açık kalmış bir `oc run` ya da ikinci OpenContinuity olabilir)")
     })?;
-    let discovery = if context.config.discovery { Some(Discovery::start(&context.identity.name, &own, port, false)?) } else { None };
-    let mut discovered = discovery.as_ref().map(Discovery::browse).transpose()?;
+    let mode = std::mem::replace(&mut context.config.discovery, DiscoveryMode::Off);
+    let (advertiser, mut discovered) = Advertiser::start(mode, &context.identity.name, &own, port)?;
 
     files::clean_partials(&context.config.files_dir);
     let mut state = SyncState::new(context.identity.device_id());
@@ -50,7 +50,7 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<()> 
         tokio::select! {
             command = context.commands.recv() => match command {
                 None | Some(Command::Shutdown) => return Ok(()),
-                Some(Command::StartPairing { address }) => pairing_host::start(context, discovery.as_ref(), &mut pairing, address),
+                Some(Command::StartPairing { address }) => pairing_host::start(context, &advertiser, &mut pairing, address),
                 Some(Command::ConfirmCode(accepted)) => pairing_host::forward(&pairing, Input::Confirm(accepted)),
                 Some(Command::CancelPairing) => pairing_host::forward(&pairing, Input::Cancel),
                 Some(Command::Unpair { fingerprint_prefix }) => {
@@ -146,7 +146,7 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<()> 
                 }
             }
             Some(update) = pairing_host::next_update(&mut pairing) => {
-                pairing_host::apply(context, &mut group, discovery.as_ref(), &mut pairing, update)?;
+                pairing_host::apply(context, &mut group, &advertiser, &mut pairing, update)?;
             }
             _ = heartbeat.tick() => {
                 for member in &mut group.members {

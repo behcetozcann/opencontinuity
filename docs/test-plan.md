@@ -115,6 +115,21 @@ Mac: `OpenContinuity.app` (.dmg, imzasız). Windows: `OpenContinuity_0.0.1_x64-s
 | L6 | Oturumu kapat/aç: kendiliğinden başlar (`~/.config/autostart/OpenContinuity.desktop`) ve bağlanır | [x] 2026-10-19 5 sn'de iki eşe bağlandı; kopukken yapılan Mac kopyası bağlanınca gitti |
 | L7 | Parola yöneticisinden (KeePassXC) kopya gönderilmez | [x] 2026-10-19 `gizli/geçici, atlandı` (x-kde-passwordManagerHint); Mac panosunda parola yok |
 
+## Gerçek cihaz — iOS (Faz 1, uygulama açıkken)
+
+Simülatörde (2026-10-19, sahte panolu `fake_peer` ile) doğrulandı: Bonjour ile bulma + eşleştirme, Mac → iPhone metin/PNG/klasör (hash eşit, klasör yapısı korunuyor), iPhone → Mac metin (hash eşit), uygulama yeniden açılınca kendiliğinden bağlanma, yankı yok. Simülatörde dışarıdan yazılan panoyu okuma iOS tarafından sessizce reddediliyor (`PBErrorDomain 13`); otomatik okuma yalnız gerçek cihazda denenebilir.
+
+| # | Senaryo | Sonuç |
+|---|---|---|
+| I1 | Xcode ile kurulum; ilk açılışta Yerel Ağ izni "Eşleştirmeye başla"dan sonra sorulur | [ ] |
+| I2 | Mac'te Ayarlar › Cihaz ekle → iPhone'da Eşleştirmeye başla → kod iki ekranda aynı → gruptaki Windows/Linux iPhone'u kendiliğinden tanır | [ ] |
+| I3 | Uygulama açıkken Mac/Windows/Linux'ta kopyala → iPhone'da yapıştır (Türkçe + emoji); görsel Notlar'a yapıştırılır | [ ] |
+| I4 | Başka uygulamada kopyala → OpenContinuity'ye dön → bilgisayarlarda yapıştır ("Yapıştırmaya izin ver" uyarısı çıkar; Ayarlar › OpenContinuity › Diğer Uygulamalardan Yapıştır = İzin Ver sonrası çıkmaz) | [ ] |
+| I5 | "Yapıştır" düğmesi (sistem PasteButton) uyarısız gönderir | [ ] |
+| I6 | Bilgisayardan klasör kopyala → iPhone'da Dosyalar › iPhone'umda › OpenContinuity altında aynı yapı; satıra uzun bas › "Dosyalar'da göster" | [ ] |
+| I7 | Dosya gönder (Dosyalar'dan birden çok dosya/klasör) → bilgisayarda İndirilenler › OpenContinuity | [ ] |
+| I8 | Arka plana al → bilgisayarlarda iPhone "bağlı değil"; öne getir → birkaç saniyede bağlanır | [ ] |
+
 ## Bulgular
 
 - **macOS yazma yarışı (2026-10-17):** Yazan uygulama `clearContents` + `setString` yapınca sayaç yalnız bir kez artıyor; araya giren okuma boş pano görürse o kopya kaçıyordu (1/9). `read_after_change` boş görünce 100 ms sonra yeniden okuyor; sonra 20/20.
