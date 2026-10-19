@@ -37,9 +37,9 @@ OC_CONFIG_DIR=<dizin> OC_PORT=47810 cargo run -p oc-engine --example fake_peer  
 - Gerçek cihaz testi yapılmadıysa `docs/test-plan.md`'de işaretlenmez.
 - Dosya başına 300 satırı geçme.
 
-## Durum (2026-10-19 akşam, oturum sonu)
+## Durum (2026-10-19 gece, oturum sonu)
 
-Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.10** (2026-10-19; `main` = etiket v0.1.10, ec3d0ef; protokol v6: metin + görsel + dosya/klasör + grup). 0.1.10: gelen dosya/görselde sesli bildirim (`notifications.rs`, tauri-plugin-notification, macOS "Glass"; metin sessiz; Ayarlar › Genel'den kapatılır) + `ios` dalı `main`'e katıldı. macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ve noterlikli. 0.1.8 numarası yayınlanmadan atlandı. Windows paketi imzasız (SmartScreen "Yine de çalıştır" uyarısı; öneri Azure Trusted Signing, kullanıcı karar vermedi).
+Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.10** (2026-10-19; `main` = etiket v0.1.10, ec3d0ef; protokol v6: metin + görsel + dosya/klasör + grup). 0.1.10: gelen dosya/görselde sesli bildirim (`notifications.rs`, tauri-plugin-notification, macOS "Glass"; metin sessiz; Ayarlar › Genel'den kapatılır; gerçek Mac'te kullanıcı onaylı) + `ios` dalı `main`'e katıldı. 1.0 için konuşulan ölçüt: gerçek cihaz testleri (M, I, Linux paketi), protokol v7 sabitlenmesi, iOS App Store, Windows kod imzası, gerçek simge. macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ve noterlikli. 0.1.8 numarası yayınlanmadan atlandı. Windows paketi imzasız (SmartScreen "Yine de çalıştır" uyarısı; öneri Azure Trusted Signing, kullanıcı karar vermedi).
 
 0.1.9 gerçek cihazda (Mac + Windows + DentOs Linux Mint) L1–L7 geçti; "cihaz eklerken bağlantılar kopmaz" düzeltmesi de gerçek cihazda doğrulandı (M7). Test paketlerine bundan sonra ön sürüm numarası verilecek (ör. `0.1.10-test.1`), aynı numara güncelleyiciyle gelmiyor.
 
@@ -76,7 +76,7 @@ iOS TestFlight (2026-10-19): ASC kaydı `OpenContinuity` (app id 6824589766), da
 iOS Faz 1 (2026-10-19, `ios` dalı, plan: araştırma `docs/ios-research.md`): uygulama açıkken iki yönlü metin/PNG/dosya senkronu, 6 haneli eşleştirme, Cihazlar/kaldır, Dosya gönder, gelen dosyalar Belgeler'de (Dosyalar uygulamasında görünür). Simülatörde doğrulandı (test planı "iOS" bölümü); gerçek iPhone'da denenmedi (I1–I8). Simülatör pano eşitlemesi kapatıldı (`defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false`) — açıkken test içeriği Mac'teki gerçek uygulamaya, oradan gruba gider. DEBUG başlatma argümanları: `-ocAutoPair YES`, `-ocPushText <metin>`.
 
 Sıradaki:
-1. iOS: gerçek iPhone'da I1–I8 (Xcode ile kablolu kurulum, Team LKD3F8VA6H). Sonra Faz 2: Paylaş uzantısı, App Intents (Gönder / Sonuncuyu Al), protokol v7 `FetchLatest` + masaüstü 0.1.10. Faz 3: QR eşleştirme, `BGContinuedProcessingTask`, AB DMA talebi.
+1. iOS: kalan I testleri (Windows/Linux → iPhone, klasör, Dosya gönder, Fotoğraf gönder, arka plan/yeniden bağlanma). Kilitlenince bağlantı kopması normal (iOS askıya alır); önerildi, onay bekliyor: süren aktarım için `beginBackgroundTask` (~30 sn). Ayarlar ekranı eski liste görünümünde; cihaz adı ağda "iPhone" (iOS gerçek adı vermiyor) → ad değiştirme ayarı önerisi. Sonra Faz 2: Paylaş uzantısı, App Intents (Gönder / Sonuncuyu Al), protokol v7 `FetchLatest` (1.0'dan önce girmeli). Faz 3: QR eşleştirme, `BGContinuedProcessingTask`, AB DMA talebi.
 2. OpenContinuity için açık öneriler: Kaldırılanlar listesi + "X sizi kaldırdı" bildirimi; Windows kod imzası; gelen görseli dosya olarak kaydetme; saklanacak aktarım sayısı ayarı; M1–M6 (iOS uygulamasından sonra).
 3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
 
