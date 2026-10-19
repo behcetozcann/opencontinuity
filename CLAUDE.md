@@ -30,9 +30,11 @@ cd apps/desktop/src-tauri && PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo tauri
 - Gerçek cihaz testi yapılmadıysa `docs/test-plan.md`'de işaretlenmez.
 - Dosya başına 300 satırı geçme.
 
-## Durum (2026-10-19, oturum sonu)
+## Durum (2026-10-19 akşam, oturum sonu)
 
-Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.7** (protokol v5: metin + görsel + dosya/klasör). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ve 0.1.7'den beri **noterlikli** (DMG içindeki uygulama `spctl`: accepted, Notarized Developer ID; staple doğrulandı).
+Depo https://github.com/behcetozcann/opencontinuity (herkese açık, PolyForm Noncommercial). Yayında: **v0.1.9** (`main` = etiket v0.1.9, 4b927d1; protokol v6: metin + görsel + dosya/klasör + grup). macOS paketi Developer ID ile imzalı (Team LKD3F8VA6H, kimlik `org.opencontinuity.desktop`) ve noterlikli. 0.1.8 numarası yayınlanmadan atlandı. Windows paketi imzasız (SmartScreen "Yine de çalıştır" uyarısı; öneri Azure Trusted Signing, kullanıcı karar vermedi).
+
+0.1.9 gerçek cihazda (Mac + Windows + DentOs Linux Mint) L1–L7 geçti; "cihaz eklerken bağlantılar kopmaz" düzeltmesi gerçek cihazda henüz denenmedi. Test paketlerine bundan sonra ön sürüm numarası verilecek (ör. `0.1.10-test.1`), aynı numara güncelleyiciyle gelmiyor.
 
 Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 - Görsel panosu (0.1.3, v4): PNG, ≤ 32 MiB, 256 KiB parçalar. macOS `public.png`/TIFF→PNG; Windows `PNG` biçimi (IEND'e göre kırpılır) / CF_DIB→PNG, yazarken PNG + CF_DIB. Metin + görsel birlikteyse metin gider.
@@ -40,7 +42,7 @@ Faz 2 yapılanlar (hepsi gerçek cihazda kullanıcı onaylı):
 - Arayüz: tür simgesi + yön rozeti, "gönderiliyor/alınıyor" satırı ve çizgide akış, sınır aşımı satırı, gelen dosyada "Göster", Ayarlar → Gelen dosyalar.
 - Test planı: G0–G2, D0, D2 kayıtla işaretli; kalan G/D'yi kullanıcı toplu "tamam" dedi (madde madde işaretlenmedi).
 
-Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3 sn sonra aynı içerikle yeniden yazar → aynı görsel 2 kez gider (kullanıcı filtre istemedi). Win+Shift+S alıntısı kopyalamadan panoya girer, Mac ⌘⇧4 dosyaya kaydeder.
+Bilinen davranışlar (hata değil): Windows Ekran Alıntısı Aracı panoyu 0,3 sn sonra aynı içerikle yeniden yazar → aynı görsel 2 kez gider (kullanıcı filtre istemedi). Win+Shift+S alıntısı kopyalamadan panoya girer, Mac ⌘⇧4 dosyaya kaydeder. Nemo/Finder/Gezgin panodaki görsel verisini dosyaya çevirmez. KeePassXC süresi dolunca panoyu (başkasının içeriği olsa da) temizler. Kaldırılan cihaz o cihazla doğrudan yeniden eşleşmedikçe geri gelmez (arayüzde görünmüyor — öneri: Kaldırılanlar listesi).
 
 0.1.5–0.1.7 (2026-10-18 akşam):
 - Hareket azaltma (Windows "Animasyon efektleri" kapalı → `prefers-reduced-motion`): durum animasyonları kalır, yer değiştiren hareketler solmaya döner (`components.css` sonu). Gerçek cihazda onaylı.
@@ -63,10 +65,9 @@ Yedek arama (2026-10-19, `multi-device`): bağlantıyı asıl yönde küçük pa
 Kararsız testler (2026-10-19, çözüldü): yük altında bir uç el sıkışmayı zaman aşımıyla bırakırken öteki tamamlayıp kısa süre "bağlı" görünüyor (üretimde EOF ile kendini düzeltir). Testler artık `Node::wait_current` (son durum, kuyruktaki eski durum değil) ile iki ucu bekler, `Node::stop` motorun bitmesini bekler. Yerel yük testi: aynı anda 12 süreç → 2/240; izlenen tek hata `free_port` çakışması (test altyapısı).
 
 Sıradaki:
-1. Sürüm 0.1.8 yapıldı; ilk test derlemesi (run 39228311808) yedek aramadan ÖNCE — `release.yml`'i `multi-device`'ta yeniden tetikle → kullanıcı DentOs'u masaüstüyle çalıştırıp (şu an `multi-user.target`, lightdm kapalı) `.deb` ile L1–L7; Mac/Windows'a da aynı derleme (v6, 0.1.7 ile bağlanmaz).
-2. Toplu gerçek cihaz testi: M1–M6 + kopukken kopya (Mac kapak kapat/aç, bağlanmadan kopyala → Windows'ta yapıştır). Kullanıcı testleri biriktirmek istedi.
+1. Kullanıcı yeni oturumda yeni iş başlatacak (muhtemelen iOS uygulaması) — ne istediğini sor.
+2. OpenContinuity için açık öneriler: Kaldırılanlar listesi + "X sizi kaldırdı" bildirimi; Windows kod imzası; gelen görseli dosya olarak kaydetme; saklanacak aktarım sayısı ayarı; 0.1.9'da "cihaz eklerken kopmama"yı gerçek cihazda denemek; M1–M6.
 3. Açık bulgu: Windows Mac uykusunu ~4 dk geç fark etti (yeniden üretilmedi).
-4. Diğer Faz 2: pano geçmişi/tercihler, isteğe bağlı "dosya paylaşımı" anahtarı.
 
 Açık kalanlar: gerçek simge tasarımı (yer tutucu); GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap.
 
