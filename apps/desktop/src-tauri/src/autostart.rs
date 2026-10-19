@@ -77,8 +77,9 @@ pub fn is_enabled(app: &AppHandle) -> Result<bool, String> {
 pub fn sync(app: &AppHandle, config_dir: &Path) {
     let _ = CONFIG_DIR.set(config_dir.to_path_buf());
     let _ = std::fs::remove_file(config_dir.join(OLD_MARKER));
-    // Geliştirme derlemesi girişe kaydedilmez; kayıt target/ altındaki binary'yi gösterirdi.
-    if cfg!(debug_assertions) {
+    // Geliştirme derlemesi ve OC_CONFIG_DIR'li deneme örneği girişe kaydedilmez;
+    // kayıt kurulu uygulamanın yerine target/ altındaki binary'yi gösterirdi.
+    if cfg!(debug_assertions) || std::env::var_os("OC_CONFIG_DIR").is_some() {
         return;
     }
     if config_dir.join(DISABLED_MARKER).exists() {
