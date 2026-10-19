@@ -4,6 +4,7 @@
 mod autostart;
 mod commands;
 mod diagnostics;
+mod notifications;
 mod tray;
 mod updater;
 
@@ -110,6 +111,7 @@ fn main() {
     }
     let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_view,
             commands::start_pairing,
@@ -119,6 +121,8 @@ fn main() {
             commands::unpair,
             commands::autostart_enabled,
             commands::set_autostart,
+            commands::notifications_enabled,
+            commands::set_notifications,
             commands::app_version,
             commands::restart_engine,
             commands::check_update,
@@ -138,6 +142,7 @@ fn main() {
             let unpaired = PeerStore::new(&config.config_dir).load_all()?.is_empty();
             diagnostics::open(&config.config_dir);
             autostart::sync(app.handle(), &config.config_dir);
+            notifications::init(&config.config_dir);
             let (engine, handle, events) = Engine::new(config, ClipboardSource::System);
             let view = View { session_warning: oc_clipboard::session_warning().map(str::to_owned), ..View::default() };
             if let Some(warning) = &view.session_warning {
@@ -217,9 +222,12 @@ fn apply_event(app: &AppHandle, event: Event) {
         Event::Sent { content, bytes, items, .. } => {
             update_view(app, |view| view.record_transfer(Transfer::now("sent", content, bytes, items)))
         }
-        Event::Received { content, bytes, items, from, saved_to, .. } => update_view(app, |view| {
-            view.record_transfer(Transfer::now("received", content, bytes, items).from(from).saved_to(saved_to))
-        }),
+        Event::Received { content, bytes, items, from, saved_to, .. } => {
+            notifications::received(app, content, items, &from);
+            update_view(app, |view| {
+                view.record_transfer(Transfer::now("received", content, bytes, items).from(from).saved_to(saved_to))
+            })
+        }
         Event::TooLarge { content, bytes, .. } => {
             update_view(app, |view| view.record_transfer(Transfer::now("too_large", content, bytes, 1)))
         }

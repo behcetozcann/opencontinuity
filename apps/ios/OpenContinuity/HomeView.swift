@@ -17,7 +17,7 @@ struct HomeView: View {
                         PairPrompt { pairingShown = true }
                     } else {
                         DeviceGrid(pairingShown: $pairingShown)
-                        SendButton(enabled: store.connectedCount > 0, photos: { photosShown = true }, files: { importerShown = true })
+                        SendActions(connected: store.connectedCount, photos: { photosShown = true }, files: { importerShown = true })
                     }
                     ActivityList()
                 }
@@ -101,32 +101,73 @@ private struct DeviceGrid: View {
     }
 }
 
-private struct SendButton: View {
-    let enabled: Bool
+private struct SendActions: View {
+    let connected: Int
     let photos: () -> Void
     let files: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            Menu {
-                Button(action: photos) { Label("Fotoğraf", systemImage: "photo.on.rectangle") }
-                Button(action: files) { Label("Dosya", systemImage: "folder") }
-            } label: {
-                Label("Gönder", systemImage: "arrow.up")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .foregroundStyle(.white)
-                    .background(Capsule().fill(enabled ? Color.accentColor : Color(.systemGray3)))
-            }
-            .disabled(!enabled)
-            if !enabled {
-                Text("Göndermek için bir bilgisayar bağlı olmalı.")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Gönder")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Text(connected > 0 ? "\(connected) bilgisayara" : "Bağlı bilgisayar yok")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            HStack(spacing: 12) {
+                SendTile(title: "Fotoğraf", subtitle: "Galeriden", symbol: "photo.on.rectangle.angled", colors: [.pink, .orange], action: photos)
+                SendTile(title: "Dosya", subtitle: "Dosyalar'dan", symbol: "folder.fill", colors: [.blue, .cyan], action: files)
+            }
+            .disabled(connected == 0)
         }
-        .animation(.smooth, value: enabled)
+    }
+}
+
+private struct SendTile: View {
+    @Environment(\.isEnabled) private var isEnabled
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let colors: [Color]
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 18) {
+                Image(systemName: symbol)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(
+                        Circle().fill(LinearGradient(colors: isEnabled ? colors : [Color(.systemGray3)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(.secondarySystemBackground)))
+        }
+        .buttonStyle(PressableStyle())
+        .opacity(isEnabled ? 1 : 0.6)
+    }
+}
+
+/// Basınca hafifçe küçülür.
+private struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+            .sensoryFeedback(.impact(weight: .light), trigger: configuration.isPressed) { _, pressed in pressed }
     }
 }
 

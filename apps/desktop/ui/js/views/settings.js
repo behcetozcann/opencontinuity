@@ -13,6 +13,10 @@ async function loadAutostart() {
   }
 }
 
+async function loadNotifications() {
+  $("notifications").checked = await invoke("notifications_enabled");
+}
+
 function showError(element, message) {
   element.hidden = false;
   element.textContent = message;
@@ -104,6 +108,10 @@ export function bindSettings() {
     if (error) showError($("autostart-error"), `Başlangıç ayarı değiştirilemedi: ${error}`);
     loadAutostart();
   });
+  $("notifications").addEventListener("change", async (event) => {
+    await run("set_notifications", { enabled: event.target.checked });
+    loadNotifications();
+  });
   $("open-files").addEventListener("click", async () => {
     const error = await run("open_files_dir");
     if (error) showError($("open-files-error"), `Klasör açılamadı: ${error}`);
@@ -149,6 +157,7 @@ export function renderSettings({ view, ui, version }) {
   sheet.setAttribute("aria-hidden", String(!ui.settingsOpen));
   if (ui.settingsOpen && !wasOpen) {
     loadAutostart();
+    loadNotifications();
     $("log-result").hidden = true;
     sheet.querySelector(".sheet-body").scrollTop = 0;
   }

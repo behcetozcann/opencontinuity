@@ -3,7 +3,7 @@
 use oc_engine::{ClipboardSource, Command, Engine, EngineConfig};
 use tauri::{AppHandle, State};
 
-use crate::{AppState, View, autostart, diagnostics, spawn_engine, update_view, updater};
+use crate::{AppState, View, autostart, diagnostics, notifications, spawn_engine, update_view, updater};
 
 #[tauri::command]
 pub fn get_view(state: State<'_, AppState>) -> View {
@@ -45,6 +45,16 @@ pub fn autostart_enabled(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
     autostart::set_by_user(&app, enabled)
+}
+
+#[tauri::command]
+pub fn notifications_enabled() -> bool {
+    notifications::is_enabled()
+}
+
+#[tauri::command]
+pub fn set_notifications(enabled: bool) -> Result<(), String> {
+    notifications::set_by_user(enabled)
 }
 
 #[tauri::command]
