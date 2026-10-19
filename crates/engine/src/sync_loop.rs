@@ -101,6 +101,8 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow
                         let id = take_id(&mut next_link_id);
                         activate(context, &mut group, &outlets, &state, connection, true, id).await?;
                     }
+                    // Deneme sürerken eş öteki yönden bağlandı.
+                    Err(_) if member.link.is_some() => {}
                     Err(failures) => {
                         context.events.diagnostic(format!("{} bağlanılamadı: {failures}", member.peer.name));
                         member.error = Some(failures);

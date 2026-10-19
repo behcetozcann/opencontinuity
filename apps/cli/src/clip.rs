@@ -27,8 +27,10 @@ pub fn watch() -> anyhow::Result<()> {
 }
 
 pub fn set(text: &str) -> anyhow::Result<()> {
-    oc_clipboard::system()?.write_text(text)?;
+    let clipboard = oc_clipboard::system()?;
+    clipboard.write_text(text)?;
     println!("Panoya yazıldı: {}", describe(&Content::Text(text.to_owned())));
+    hold(clipboard.as_ref());
     Ok(())
 }
 
@@ -37,17 +39,37 @@ pub fn set_image(path: &std::path::Path) -> anyhow::Result<()> {
     if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
         anyhow::bail!("{} bir PNG dosyası değil", path.display());
     }
-    oc_clipboard::system()?.write_png(&png)?;
+    let clipboard = oc_clipboard::system()?;
+    clipboard.write_png(&png)?;
     println!("Panoya yazıldı: {}", describe(&Content::Image(png)));
+    hold(clipboard.as_ref());
     Ok(())
 }
 
 pub fn set_files(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     let paths: Vec<_> = paths.iter().map(std::fs::canonicalize).collect::<Result<_, _>>()?;
-    oc_clipboard::system()?.write_files(&paths)?;
+    let clipboard = oc_clipboard::system()?;
+    clipboard.write_files(&paths)?;
     println!("Panoya yazıldı: {}", describe(&Content::Files(paths)));
+    hold(clipboard.as_ref());
     Ok(())
 }
+
+/// X11'de içeriği yazan süreç tutar; süreç çıkınca pano boşalır. xclip gibi
+/// başka bir kopya gelene kadar beklenir.
+#[cfg(target_os = "linux")]
+fn hold(clipboard: &dyn oc_clipboard::Clipboard) {
+    // Kendi yazmamızın sayaç artışı geçsin.
+    sleep(POLL_INTERVAL);
+    let written = clipboard.sequence();
+    println!("Pano bu süreçte tutuluyor; başka bir kopya gelince çıkılır.");
+    while clipboard.sequence() == written {
+        sleep(POLL_INTERVAL);
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn hold(_clipboard: &dyn oc_clipboard::Clipboard) {}
 
 /// İçeriği asla göstermez: yalnız uzunluk ve hash öneki.
 fn describe(content: &Content) -> String {
