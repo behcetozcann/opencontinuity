@@ -30,15 +30,19 @@ final class PasteboardBridge {
 
     func write(_ clip: ClipRecord) {
         let pasteboard = UIPasteboard.general
+        let item: [String: Any]
         switch clip {
         case let .text(text):
-            pasteboard.string = text
+            item = [UTType.utf8PlainText.identifier: text]
         case let .png(data):
-            pasteboard.setData(data, forPasteboardType: UTType.png.identifier)
+            item = [UTType.png.identifier: data]
         case .files:
             // Dosyalar Belgeler'e kaydedildi; panoya dosya yazılmaz.
             return
         }
+        // Evrensel Pano gelen içeriği Mac'e geri taşımasın; taşırsa Mac onu yeni
+        // kopya sanıp gruba yeniden gönderir.
+        pasteboard.setItems([item], options: [.localOnly: true])
         lastSeen = pasteboard.changeCount
     }
 
