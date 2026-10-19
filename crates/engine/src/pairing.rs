@@ -10,7 +10,7 @@ use oc_protocol::Message;
 use oc_transport::{Session, Trust};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::time::timeout;
+use tokio::time::{Instant, sleep_until, timeout};
 
 use crate::events::{Emitter, Event, PairingStage};
 use crate::link::{self, Link};
@@ -113,7 +113,11 @@ async fn connect(
         if config.discovery { Some(Discovery::start(&identity.name, &identity.fingerprint(), config.port, true)?) } else { None };
     let mut discovered = discovery.as_ref().map(Discovery::browse).transpose()?;
     let own_hex = hex::encode(identity.fingerprint());
+    // Asıl yönde küçük parmak izli taraf arar; öteki `fallback_delay` içinde
+    // bağlantı gelmezse kendisi arar (gelen bağlantısı güvenlik duvarına takılıyorsa).
+    let mut fallback: Option<(Instant, Vec<SocketAddr>)> = None;
     loop {
+        let fallback_at = fallback.as_ref().map(|(at, _)| *at);
         tokio::select! {
             accepted = listener.accept() => {
                 let (tcp, remote) = accepted?;
@@ -127,18 +131,38 @@ async fn connect(
                 }
             }
             Some(found) = next_found(&mut discovered) => {
-                if !found.pairing || found.fingerprint_hex < own_hex {
+                if !found.pairing {
                     continue;
                 }
-                for address in found.addresses {
-                    let attempt = oc_transport::connect(address, identity, Trust::Pairing, config.port);
-                    if let Ok(Ok(session)) = timeout(config.timing.dial_timeout, attempt).await {
-                        return Ok((session, address));
+                if found.fingerprint_hex < own_hex {
+                    if fallback.is_none() {
+                        fallback = Some((Instant::now() + config.timing.fallback_delay, found.addresses));
                     }
+                    continue;
                 }
+                if let Some(connected) = dial_pairing(config, identity, &found.addresses).await {
+                    return Ok(connected);
+                }
+            }
+            _ = sleep_until(fallback_at.unwrap_or_else(Instant::now)), if fallback_at.is_some() => {
+                let Some((at, addresses)) = fallback.as_mut() else { continue };
+                if let Some(connected) = dial_pairing(config, identity, addresses).await {
+                    return Ok(connected);
+                }
+                *at = Instant::now() + config.timing.fallback_delay;
             }
         }
     }
+}
+
+async fn dial_pairing(config: &EngineConfig, identity: &Identity, addresses: &[SocketAddr]) -> Option<(Session, SocketAddr)> {
+    for address in addresses {
+        let attempt = oc_transport::connect(*address, identity, Trust::Pairing, config.port);
+        if let Ok(Ok(session)) = timeout(config.timing.dial_timeout, attempt).await {
+            return Some((session, *address));
+        }
+    }
+    None
 }
 
 /// Bağlantı kurulana kadar iptal ve kapanış komutlarını dinler.

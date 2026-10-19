@@ -22,6 +22,7 @@ pub fn fast_timing() -> Timing {
         min_backoff: Duration::from_millis(50),
         max_backoff: Duration::from_millis(400),
         offline_copy_max_age: Duration::from_secs(120),
+        fallback_delay: Duration::from_millis(300),
     }
 }
 

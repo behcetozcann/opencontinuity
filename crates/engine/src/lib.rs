@@ -41,6 +41,9 @@ pub struct Timing {
     pub max_backoff: Duration,
     /// Bağlantı kopukken yapılan son kopya bu süre içinde bağlanılırsa gönderilir.
     pub offline_copy_max_age: Duration,
+    /// Bağlantıyı başlatmayan taraf, bu süre içinde gelen bağlantı olmazsa
+    /// kendisi arar (karşı tarafın güvenlik duvarı gelen bağlantıyı engelliyorsa).
+    pub fallback_delay: Duration,
 }
 
 impl Default for Timing {
@@ -53,6 +56,7 @@ impl Default for Timing {
             min_backoff: Duration::from_secs(1),
             max_backoff: Duration::from_secs(30),
             offline_copy_max_age: Duration::from_secs(120),
+            fallback_delay: Duration::from_secs(5),
         }
     }
 }

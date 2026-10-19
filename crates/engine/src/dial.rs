@@ -63,21 +63,25 @@ async fn dial(
     Err(failures.join(", "))
 }
 
-/// Bağlanan tarafın yeniden deneme zamanlaması: her başarısızlıkta bekleme ikiye katlanır.
+/// Yeniden deneme zamanlaması: her başarısızlıkta bekleme ikiye katlanır.
+/// `floor` hiçbir denemenin daha erken yapılmadığı süredir: asıl yönde arayan
+/// tarafta sıfır, yedek arayan tarafta `fallback_delay` (asıl yöne önce fırsat).
 pub struct Retry {
     pub next_dial: Instant,
     backoff: Duration,
     min: Duration,
     max: Duration,
+    floor: Duration,
 }
 
 impl Retry {
-    pub fn new(timing: Timing) -> Self {
-        Self { next_dial: Instant::now(), backoff: timing.min_backoff, min: timing.min_backoff, max: timing.max_backoff }
+    pub fn new(timing: Timing, floor: Duration) -> Self {
+        let next_dial = Instant::now() + floor;
+        Self { next_dial, backoff: timing.min_backoff, min: timing.min_backoff, max: timing.max_backoff, floor }
     }
 
     pub fn failed(&mut self) {
-        self.next_dial = Instant::now() + self.backoff;
+        self.next_dial = Instant::now() + self.backoff.max(self.floor);
         self.backoff = (self.backoff * 2).min(self.max);
     }
 
@@ -85,7 +89,8 @@ impl Retry {
         self.backoff = self.min;
     }
 
-    pub fn dial_now(&mut self) {
-        self.next_dial = Instant::now();
+    /// Eş ağda görüldü: deneme öne alınır (en erken `floor` sonra), ertelenmez.
+    pub fn peer_seen(&mut self) {
+        self.next_dial = self.next_dial.min(Instant::now() + self.floor);
     }
 }

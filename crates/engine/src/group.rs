@@ -2,6 +2,7 @@
 //! deneme zamanı ve bağlantı kopukken yapılan son kopya.
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use oc_pairing::{Fingerprint, Peer, device_id_of};
 use oc_protocol::{DeviceId, PeerInfo};
@@ -17,10 +18,13 @@ use crate::transfer::Pending;
 pub struct Member {
     pub peer: Peer,
     pub device_id: DeviceId,
-    /// Yalnız küçük parmak izli taraf bağlanır; çift bağlantı yarışı olmaz.
+    /// Asıl yönde küçük parmak izli taraf arar. Öteki taraf yalnız `fallback_delay`
+    /// içinde bağlantı gelmezse arar (gelen bağlantısı güvenlik duvarına takılan eş).
     pub dialer: bool,
     pub addresses: Vec<SocketAddr>,
     pub link: Option<Link>,
+    /// Bağlantı asıl yönde mi açıldı; iki bağlantı birden kurulursa iki uç da bunu tutar.
+    pub link_preferred: bool,
     pub retry: Retry,
     /// Bağlanma görevi sürüyor.
     pub dialing: bool,
@@ -31,12 +35,14 @@ pub struct Member {
 impl Member {
     fn new(peer: Peer, own: &Fingerprint, timing: Timing) -> Self {
         let addresses = peer.last_address.iter().filter_map(|address| address.parse().ok()).collect();
+        let dialer = own < &peer.fingerprint;
         Self {
             device_id: device_id_of(&peer.fingerprint),
-            dialer: own < &peer.fingerprint,
+            dialer,
             addresses,
             link: None,
-            retry: Retry::new(timing),
+            link_preferred: false,
+            retry: Retry::new(timing, if dialer { Duration::ZERO } else { timing.fallback_delay }),
             dialing: false,
             pending: None,
             error: None,
@@ -48,9 +54,17 @@ impl Member {
         hex::encode(self.peer.fingerprint)
     }
 
-    /// Bağlanma zamanı gelmişse ve bağlantı yoksa.
+    /// Bağlantı yoksa ve deneme sürmüyorsa; zamanı `retry` belirler.
     pub fn wants_dial(&self) -> bool {
-        self.dialer && self.link.is_none() && !self.dialing
+        self.link.is_none() && !self.dialing
+    }
+
+    /// Yeni oturum mevcut bağlantının yerine geçmeli mi? Asıl yöndeki bağlantı
+    /// yedek yöndekine bırakılmaz; geri kalan durumlarda yeni oturum eskisinin
+    /// yerine geçer (eş yeniden başladıysa eski bağlantı ölüdür).
+    pub fn replaces_link(&self, we_dialed: bool) -> bool {
+        let preferred = we_dialed == self.dialer;
+        self.link.is_none() || preferred || !self.link_preferred
     }
 
     pub fn prepend_address(&mut self, address: SocketAddr) {

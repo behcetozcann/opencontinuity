@@ -67,7 +67,7 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow
                     Ok(Ok(session)) => {
                         let address = SocketAddr::new(remote.ip(), session.peer_listen_port);
                         let id = take_id(&mut next_link_id);
-                        activate(context, &mut group, &outlets, &state, session, address, id).await?;
+                        activate(context, &mut group, &outlets, &state, (session, address), false, id).await?;
                     }
                     Ok(Err(error)) => context.events.diagnostic(format!("Reddedilen bağlantı: {} ({error})", remote.ip())),
                     Err(_) => context.events.diagnostic(format!("Reddedilen bağlantı: {} (zaman aşımı)", remote.ip())),
@@ -81,7 +81,7 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow
                         member.prepend_address(address);
                     }
                     if member.link.is_none() {
-                        member.retry.dial_now();
+                        member.retry.peer_seen();
                     }
                 }
             }
@@ -96,11 +96,10 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<Flow
                 let Some(member) = group.by_fingerprint(&fingerprint) else { continue };
                 member.dialing = false;
                 match result {
-                    // Bu arada eş bize bağlandıysa yeni oturum bırakılır.
-                    Ok(_) if member.link.is_some() => {}
-                    Ok((session, address)) => {
+                    // Bu arada eş bize bağlandıysa hangisinin kalacağına `activate` karar verir.
+                    Ok(connection) => {
                         let id = take_id(&mut next_link_id);
-                        activate(context, &mut group, &outlets, &state, session, address, id).await?;
+                        activate(context, &mut group, &outlets, &state, connection, true, id).await?;
                     }
                     Err(failures) => {
                         context.events.diagnostic(format!("{} bağlanılamadı: {failures}", member.peer.name));
@@ -182,20 +181,25 @@ fn on_message(context: &mut Context, state: &mut SyncState, member: &mut Member,
 }
 
 /// Oturumu başlatır; saatimizi, grup listesini ve kopukken yapılan kopyayı
-/// gönderir. Gönderilemezse oturum kurulmamış sayılır.
+/// gönderir. Gönderilemezse oturum kurulmamış sayılır. `we_dialed`: oturumu biz
+/// mi açtık (asıl yön mü, yedek mi olduğunu belirler).
 async fn activate(
     context: &mut Context,
     group: &mut Group,
     outlets: &link::Outlets,
     state: &SyncState,
-    session: Session,
-    address: SocketAddr,
+    (session, address): (Session, SocketAddr),
+    we_dialed: bool,
     id: LinkId,
 ) -> anyhow::Result<()> {
     let fingerprint = session.peer_fingerprint;
     let introductions = group.introductions_for(&fingerprint);
     // Kabul ederken parmak izi grup listesiyle doğrulandı; bu arada kaldırıldıysa bırakılır.
     let Some(member) = group.by_fingerprint(&fingerprint) else { return Ok(()) };
+    if !member.replaces_link(we_dialed) {
+        context.events.diagnostic(format!("{} ile ikinci bağlantı bırakıldı (asıl yöndeki kalıyor)", member.peer.name));
+        return Ok(());
+    }
     member.prepend_address(address);
     let text = address.to_string();
     if member.peer.last_address.as_deref() != Some(text.as_str()) {
@@ -217,6 +221,7 @@ async fn activate(
     }
     context.events.diagnostic(format!("Bağlandı: {} ({address})", member.peer.name));
     member.error = None;
+    member.link_preferred = we_dialed == member.dialer;
     member.link = Some(link);
     Ok(())
 }
