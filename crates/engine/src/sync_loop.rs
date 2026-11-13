@@ -34,7 +34,7 @@ pub async fn run(context: &mut Context, peers: Vec<Peer>) -> anyhow::Result<()> 
     let mode = std::mem::replace(&mut context.config.discovery, DiscoveryMode::Off);
     let (advertiser, mut discovered) = Advertiser::start(mode, &context.identity.name, &own, port)?;
 
-    files::clean_partials(&context.config.files_dir);
+    files::clean_on_start(&context.config.files_dir, context.config.kept_transfers);
     let mut state = SyncState::new(context.identity.device_id());
     let (outlets, mut inlets) = link::channels();
     let (dialer, mut dialed) = Dialer::new(context.identity.clone(), port, timing.dial_timeout);

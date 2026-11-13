@@ -10,8 +10,6 @@ use tokio::io::AsyncWriteExt;
 
 /// İşletim sisteminin klasörlere bıraktığı, karşıya taşımaya değmeyen dosyalar.
 const SKIPPED_NAMES: [&str; 3] = [".DS_Store", "Thumbs.db", "desktop.ini"];
-/// İndirilenler'de tutulan son aktarım klasörü sayısı; eskiler silinir.
-const KEPT_TRANSFERS: usize = 10;
 const PARTIAL_PREFIX: &str = ".partial-";
 
 pub struct Outgoing {
@@ -163,9 +161,9 @@ impl FileSink {
     }
 }
 
-/// Kabul edilen aktarımı tarihli klasöre taşır, eskileri budar; panoya konacak
-/// üst düzey yolları döner.
-pub fn accept(root: &Path, event_id: &EventId, list: &FileList) -> anyhow::Result<(PathBuf, Vec<PathBuf>)> {
+/// Kabul edilen aktarımı tarihli klasöre taşır, en yeni `kept` tanesi kalacak
+/// şekilde eskileri budar; panoya konacak üst düzey yolları döner.
+pub fn accept(root: &Path, event_id: &EventId, list: &FileList, kept: usize) -> anyhow::Result<(PathBuf, Vec<PathBuf>)> {
     let stamp = chrono::Local::now().format("%Y-%m-%d %H.%M.%S").to_string();
     let mut target = root.join(&stamp);
     for attempt in 2.. {
@@ -175,7 +173,7 @@ pub fn accept(root: &Path, event_id: &EventId, list: &FileList) -> anyhow::Resul
         target = root.join(format!("{stamp} ({attempt})"));
     }
     std::fs::rename(partial_dir(root, event_id), &target).context("gelen dosyalar taşınamadı")?;
-    prune(root, &target);
+    prune(root, Some(&target), kept);
     let tops = list.entries.iter().filter(|entry| !entry.path.contains('/')).map(|entry| target.join(&entry.path)).collect();
     Ok((target, tops))
 }
@@ -184,27 +182,29 @@ pub fn discard(root: &Path, event_id: &EventId) {
     let _ = std::fs::remove_dir_all(partial_dir(root, event_id));
 }
 
-/// Kopan bağlantılardan kalan yarım aktarımları siler.
-pub fn clean_partials(root: &Path) {
+/// Açılışta: kopan bağlantılardan kalan yarım aktarımları siler, önceki
+/// oturumdan en yeni `kept` aktarım kalır (panoda hâlâ onun yolları olabilir).
+pub fn clean_on_start(root: &Path, kept: usize) {
     let Ok(entries) = std::fs::read_dir(root) else { return };
     for entry in entries.flatten() {
         if entry.file_name().to_string_lossy().starts_with(PARTIAL_PREFIX) {
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
+    prune(root, None, kept);
 }
 
-/// Yalnız bizim adlandırdığımız (tarihle başlayan) klasörlere dokunur; en yeni
-/// `KEPT_TRANSFERS` tanesi kalır.
-fn prune(root: &Path, keep: &Path) {
+/// Yalnız bizim adlandırdığımız (tarihle başlayan) klasörlere dokunur; `keep`
+/// dahil en yeni `kept` tanesi kalır.
+fn prune(root: &Path, keep: Option<&Path>, kept: usize) {
     let Ok(entries) = std::fs::read_dir(root) else { return };
     let mut ours: Vec<PathBuf> = entries
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| path != keep && path.is_dir() && path.file_name().is_some_and(|name| is_stamp(&name.to_string_lossy())))
+        .filter(|path| Some(path.as_path()) != keep && path.is_dir() && path.file_name().is_some_and(|name| is_stamp(&name.to_string_lossy())))
         .collect();
     ours.sort();
-    let excess = (ours.len() + 1).saturating_sub(KEPT_TRANSFERS);
+    let excess = (ours.len() + usize::from(keep.is_some())).saturating_sub(kept);
     for old in ours.into_iter().take(excess) {
         let _ = std::fs::remove_dir_all(old);
     }

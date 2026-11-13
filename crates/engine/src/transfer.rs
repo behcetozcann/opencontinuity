@@ -152,7 +152,7 @@ pub fn apply_remote(context: &mut Context, state: &mut SyncState, sender: (&Devi
     let (clip, saved_to) = match event.payload {
         Payload::Text(text) => (Clip::Text(text), None),
         Payload::Png(png) => (Clip::Png(png), None),
-        Payload::Files(list) => match files::accept(&files_dir, &event.event_id, &list) {
+        Payload::Files(list) => match files::accept(&files_dir, &event.event_id, &list, context.config.kept_transfers) {
             Ok((saved, tops)) => (Clip::Files(tops), Some(saved)),
             Err(error) => {
                 files::discard(&files_dir, &event.event_id);

@@ -115,8 +115,9 @@
 .transfers li.busy.received::after { animation-direction: reverse; }
 .transfer-size { font-variant-numeric: tabular-nums; }
 .transfer-when { color: var(--muted); font-size: 12px; min-width: 64px; text-align: right; }
-.transfer-when .reveal { padding: 0; font-size: 12px; color: var(--tone); }
-.transfer-when .reveal:hover { text-decoration: underline; color: var(--tone); }
+.transfer-when .save { padding: 0; font-size: 12px; color: var(--tone); }
+.transfer-when .save:hover:not(:disabled) { text-decoration: underline; color: var(--tone); }
+.transfer-when .save:disabled { opacity: 0.6; cursor: default; }
 .empty { color: var(--muted); font-size: 12.5px; padding: 8px 4px; }
 
 .bar { margin-top: auto; padding-top: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; }

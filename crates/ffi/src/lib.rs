@@ -75,6 +75,8 @@ impl OcEngine {
             }),
             timing: Timing::default(),
             files_dir: PathBuf::from(config.files_dir),
+            // Belgeler'de (Dosyalar uygulamasında) kalıcı görünür.
+            kept_transfers: 10,
         };
         let (engine, handle, events) =
             Engine::new(engine_config, ClipboardSource::Port(ClipboardPort { local_copies, writes }));

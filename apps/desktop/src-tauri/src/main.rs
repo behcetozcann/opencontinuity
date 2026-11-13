@@ -5,6 +5,7 @@ mod autostart;
 mod commands;
 mod diagnostics;
 mod notifications;
+mod save;
 mod tray;
 mod updater;
 
@@ -28,16 +29,16 @@ pub struct Transfer {
     at_ms: u64,
     /// Gelenlerde gönderen cihaz; birden çok eş varken arayüz "Windows'tan" der.
     from: Option<String>,
-    /// Gelen dosyaların klasörü; arayüz "Göster" der. Yol arayüzden geri alınmaz.
+    /// Gelen dosyaların geçici klasörü; arayüz "Kaydet…" der. Yol arayüzden geri alınmaz.
     #[serde(skip)]
     saved_to: Option<std::path::PathBuf>,
-    can_reveal: bool,
+    can_save: bool,
 }
 
 impl Transfer {
     fn now(direction: &'static str, content: ContentKind, bytes: u64, items: usize) -> Self {
         let at_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_millis() as u64).unwrap_or(0);
-        Self { direction, content, bytes, items, at_ms, from: None, saved_to: None, can_reveal: false }
+        Self { direction, content, bytes, items, at_ms, from: None, saved_to: None, can_save: false }
     }
 
     fn from(mut self, peer: String) -> Self {
@@ -46,7 +47,7 @@ impl Transfer {
     }
 
     fn saved_to(mut self, dir: Option<std::path::PathBuf>) -> Self {
-        self.can_reveal = dir.is_some();
+        self.can_save = dir.is_some();
         self.saved_to = dir;
         self
     }
@@ -83,6 +84,13 @@ impl View {
         self.in_flight = None;
         self.recent_transfers.insert(0, transfer);
         self.recent_transfers.truncate(RECENT_TRANSFERS);
+        // Motor yeni dosya gelince öncekileri siler; onların "Kaydet…"i kalkar.
+        for older in self.recent_transfers.iter_mut().skip(1) {
+            if older.saved_to.as_ref().is_some_and(|dir| !dir.exists()) {
+                older.saved_to = None;
+                older.can_save = false;
+            }
+        }
     }
 }
 
@@ -112,6 +120,7 @@ fn main() {
     let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_view,
             commands::start_pairing,
@@ -129,8 +138,7 @@ fn main() {
             commands::install_update,
             commands::open_local_network_settings,
             commands::open_project_page,
-            commands::reveal_transfer,
-            commands::open_files_dir,
+            save::save_transfer,
             diagnostics::read_log,
             diagnostics::save_log_to_desktop,
             diagnostics::reveal_log,

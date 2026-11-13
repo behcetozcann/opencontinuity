@@ -45,8 +45,8 @@ pub fn received(app: &AppHandle, content: ContentKind, items: usize, from: &str)
         return;
     }
     let body = match content {
-        ContentKind::Files if items == 1 => "Bir dosya gönderdi · İndirilenler › OpenContinuity".to_owned(),
-        ContentKind::Files => format!("{items} öğe gönderdi · İndirilenler › OpenContinuity"),
+        ContentKind::Files if items == 1 => "Bir dosya gönderdi · yapıştırmaya hazır".to_owned(),
+        ContentKind::Files => format!("{items} öğe gönderdi · yapıştırmaya hazır"),
         ContentKind::Image => "Görsel gönderdi · panoya kopyalandı".to_owned(),
         ContentKind::Text => return,
     };

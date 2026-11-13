@@ -70,8 +70,10 @@ pub struct EngineConfig {
     /// Cihaz yayını ve arama; testlerde kapalı, iOS'ta kabuğun Bonjour'u.
     pub discovery: DiscoveryMode,
     pub timing: Timing,
-    /// Gelen dosyaların kaydedildiği klasör (İndirilenler/OpenContinuity).
+    /// Gelen dosyaların kaydedildiği klasör (masaüstünde önbellek, iOS'ta Belgeler).
     pub files_dir: PathBuf,
+    /// `files_dir`'de tutulan son aktarım sayısı; eskiler silinir.
+    pub kept_transfers: usize,
 }
 
 impl EngineConfig {
@@ -84,6 +86,8 @@ impl EngineConfig {
             discovery: DiscoveryMode::Mdns,
             timing: Timing::default(),
             files_dir: config::files_dir()?,
+            // Geçici: yapıştırınca hedefe kopyalanır, yeni dosya gelince önceki silinir.
+            kept_transfers: 1,
         })
     }
 }

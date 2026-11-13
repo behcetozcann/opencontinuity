@@ -112,11 +112,6 @@ export function bindSettings() {
     await run("set_notifications", { enabled: event.target.checked });
     loadNotifications();
   });
-  $("open-files").addEventListener("click", async () => {
-    const error = await run("open_files_dir");
-    if (error) showError($("open-files-error"), `Klasör açılamadı: ${error}`);
-    else $("open-files-error").hidden = true;
-  });
   $("add-device").addEventListener("click", () => {
     setUi({ settingsOpen: false });
     invoke("start_pairing", { address: null });

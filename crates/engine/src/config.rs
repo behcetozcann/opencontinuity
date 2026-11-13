@@ -14,15 +14,15 @@ pub fn default_dir() -> anyhow::Result<PathBuf> {
     Ok(dirs.config_dir().to_path_buf())
 }
 
-/// `OC_FILES_DIR` verilirse onu kullanır; yoksa İndirilenler/OpenContinuity.
+/// Gelen dosyaların geçici klasörü. `OC_FILES_DIR` verilirse onu kullanır; yoksa
+/// uygulamanın önbellek dizini (macOS `~/Library/Caches/…`, Windows `%LOCALAPPDATA%\…\cache`).
 pub fn files_dir() -> anyhow::Result<PathBuf> {
     if let Some(dir) = std::env::var_os("OC_FILES_DIR") {
         return Ok(PathBuf::from(dir));
     }
-    let downloads = directories::UserDirs::new()
-        .and_then(|dirs| dirs.download_dir().map(PathBuf::from))
-        .context("İndirilenler klasörü bulunamadı")?;
-    Ok(downloads.join("OpenContinuity"))
+    let dirs = directories::ProjectDirs::from("org", "OpenContinuity", "OpenContinuity")
+        .context("kullanıcı önbellek dizini bulunamadı")?;
+    Ok(dirs.cache_dir().join("incoming"))
 }
 
 pub fn device_name() -> String {

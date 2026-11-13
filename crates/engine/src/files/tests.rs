@@ -44,7 +44,7 @@ async fn sink_writes_tree_and_accept_moves_it() {
     let completed = sink.chunk(second).await.unwrap().expect("tamamlanmalı");
     assert_eq!((completed.lamport, &completed.list), (4, &outgoing.list));
 
-    let (saved, tops) = accept(root.path(), &[1; 16], &completed.list).unwrap();
+    let (saved, tops) = accept(root.path(), &[1; 16], &completed.list, 10).unwrap();
     assert_eq!(tops, [saved.join("Klasör")]);
     assert_eq!(std::fs::read(saved.join("Klasör/iç/veri.bin")).unwrap(), data);
     assert_eq!(std::fs::read(saved.join("Klasör/boş.txt")).unwrap(), b"");
@@ -71,10 +71,23 @@ fn prune_keeps_newest_stamped_folders_and_ignores_others() {
         std::fs::create_dir(root.path().join(format!("2026-10-{day:02} 10.00.00"))).unwrap();
     }
     std::fs::create_dir(root.path().join("Benim klasörüm")).unwrap();
-    prune(root.path(), &root.path().join("yeni"));
+    prune(root.path(), Some(&root.path().join("yeni")), 10);
     let mut left: Vec<_> = std::fs::read_dir(root.path()).unwrap().map(|entry| entry.unwrap().file_name()).collect();
     left.sort();
-    assert_eq!(left.len(), KEPT_TRANSFERS);
+    // 9 eski + yeni (henüz oluşmadı) = 10; kullanıcının klasörü sayılmaz.
+    assert_eq!(left.len(), 10);
     assert_eq!(left[0], "2026-10-04 10.00.00");
     assert!(left.contains(&"Benim klasörüm".into()));
+}
+
+#[test]
+fn clean_on_start_keeps_only_newest_and_removes_partials() {
+    let root = tempfile::tempdir().unwrap();
+    for day in 1..=3 {
+        std::fs::create_dir(root.path().join(format!("2026-10-{day:02} 10.00.00"))).unwrap();
+    }
+    std::fs::create_dir(partial_dir(root.path(), &[3; 16])).unwrap();
+    clean_on_start(root.path(), 1);
+    let left: Vec<_> = std::fs::read_dir(root.path()).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+    assert_eq!(left, ["2026-10-03 10.00.00"]);
 }

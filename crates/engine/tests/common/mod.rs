@@ -76,6 +76,7 @@ impl Node {
             discovery,
             timing,
             files_dir: files.path().to_path_buf(),
+            kept_transfers: 10,
         };
         let (engine, handle, events) = Engine::new(config, ClipboardSource::Port(ClipboardPort { local_copies, writes }));
         let task = tokio::spawn(async move { engine.run().await.unwrap() });

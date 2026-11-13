@@ -1,5 +1,5 @@
 // Ana ekran: bu cihaz ve grup, durum, bağlamsal kart, paylaşım anahtarı, son aktarımlar.
-import { invoke, run, setUi } from "../api.js";
+import { invoke, setUi } from "../api.js";
 import { flashTransfer, renderDevices } from "../components/devices.js";
 import { pickNotice, renderNotice } from "../components/notice.js";
 import { icons } from "../icons.js";
@@ -92,17 +92,26 @@ function transferItem(transfer, { busy = false, fresh = false, group = false } =
   }
   item.querySelector(".transfer-size").textContent = formatBytes(transfer.bytes);
   const when = item.querySelector(".transfer-when");
-  if (transfer.can_reveal) {
-    // Gelen dosyalar: zaman yerine klasörü açan düğme; zaman ipucunda kalır.
-    const reveal = document.createElement("button");
-    reveal.className = "btn link reveal";
-    reveal.textContent = "Göster";
-    reveal.title = formatWhen(transfer.at_ms);
-    reveal.addEventListener("click", async () => {
-      const error = await run("reveal_transfer", { atMs: transfer.at_ms });
-      if (error) reveal.textContent = "Klasör yok";
+  if (transfer.can_save) {
+    // Gelen dosyalar geçici klasörde: zaman yerine kalıcı kopya için düğme; zaman ipucunda kalır.
+    const save = document.createElement("button");
+    save.className = "btn link save";
+    save.textContent = "Kaydet…";
+    save.title = formatWhen(transfer.at_ms);
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      save.textContent = "Kaydediliyor…";
+      try {
+        const folder = await invoke("save_transfer", { atMs: transfer.at_ms });
+        save.textContent = folder ? "Kaydedildi" : "Kaydet…";
+        if (folder) save.title = folder;
+      } catch (error) {
+        save.textContent = "Kaydedilemedi";
+        save.title = String(error);
+      }
+      save.disabled = false;
     });
-    when.append(reveal);
+    when.append(save);
   } else {
     when.textContent = busy ? "şimdi" : formatWhen(transfer.at_ms);
   }
