@@ -2,12 +2,11 @@
 //! kullanıcı onaylayınca paket indirilir, imzası doğrulanır, kurulur ve uygulama
 //! yeniden başlar. İmzası tutmayan paket kurulmaz (tauri-plugin-updater).
 
-use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_updater::{Update, UpdaterExt};
+use tauri_plugin_updater::UpdaterExt;
 
 use crate::{AppState, diagnostics, update_view};
 
@@ -39,10 +38,6 @@ pub enum UpdateStatus {
     },
 }
 
-/// Denetimde bulunan, kurulmayı bekleyen sürüm.
-#[derive(Default)]
-pub struct PendingUpdate(Mutex<Option<Update>>);
-
 pub fn spawn_periodic_check(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_DELAY).await;
@@ -66,7 +61,6 @@ pub async fn check(app: &AppHandle) {
         Ok(Some(update)) => {
             diagnostics::write(&format!("Güncelleme var: {} → {}", update.current_version, update.version));
             let status = UpdateStatus::Available { version: update.version.clone(), notes: update.body.clone() };
-            *pending(app) = Some(update);
             set(app, status);
         }
         Ok(None) => set(app, UpdateStatus::UpToDate { checked_at_ms: now_ms() }),
@@ -77,8 +71,27 @@ pub async fn check(app: &AppHandle) {
     }
 }
 
+/// Kurmadan hemen önce yeniden denetler: denetimden sonra Release'teki paket
+/// değiştiyse eski imzayla yeni dosya karşılaştırılıp "signature verification
+/// failed" alınıyordu (0.1.12'de aynı sürüm yeniden yüklenince).
 pub async fn install(app: &AppHandle) -> Result<(), String> {
-    let update = pending(app).clone().ok_or("kurulacak güncelleme yok")?;
+    let fresh = match app.updater() {
+        Ok(updater) => updater.check().await,
+        Err(error) => Err(error),
+    };
+    let update = match fresh {
+        Ok(Some(update)) => update,
+        Ok(None) => {
+            set(app, UpdateStatus::UpToDate { checked_at_ms: now_ms() });
+            return Err("kurulacak güncelleme yok".into());
+        }
+        Err(error) => {
+            let message = format!("Güncelleme denetlenemedi: {error}");
+            diagnostics::write(&message);
+            set(app, UpdateStatus::Failed { message: message.clone() });
+            return Err(message);
+        }
+    };
     let version = update.version.clone();
     diagnostics::write(&format!("Güncelleme indiriliyor: {version}"));
     set(app, UpdateStatus::Downloading { version: version.clone(), percent: None });
@@ -118,10 +131,6 @@ pub fn current(app: &AppHandle) -> UpdateStatus {
 
 fn set(app: &AppHandle, status: UpdateStatus) {
     update_view(app, |view| view.update = status);
-}
-
-fn pending(app: &AppHandle) -> std::sync::MutexGuard<'_, Option<Update>> {
-    app.state::<PendingUpdate>().inner().0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn now_ms() -> u64 {

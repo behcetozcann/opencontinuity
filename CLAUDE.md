@@ -82,7 +82,7 @@ Sıradaki:
 
 Simge (2026-10-19, 0.1.11): "satırlı kâğıt" — mavi zemin, iki kâğıt arasında ayırıcı, ön kâğıtta 3 satır. Kaynak `apps/desktop/src-tauri/icons/source/` (`app-icon.svg` → `cargo tauri icon <svg> -o <geçici>` ile üret, yalnız depodaki dosyaları kopyala; `ios-icon.svg` kenara kadar mavi, alfasız 1024 PNG olarak `AppIcon.appiconset/icon-1024.png`; tepsi `python3 tray.py <çıktı>` → `icons/tray/`). Gerçek cihazlarda (Dock, menü çubuğu, Windows tepsisi, iPhone) henüz bakılmadı. Bu Mac'te Simulator.app yok (simctl çalışıyor, ekran görüntüsü `xcrun simctl io <udid> screenshot`).
 
-Açık kalanlar: GitHub'da push/etiket iş akışını tetiklemiyor (elle `gh workflow run`), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap.
+Açık kalanlar: etiket push'u Release'i artık KENDİSİ tetikliyor (2026-11-13, v0.1.12) ama push derlemesi noterliği atlıyor (`inputs.notarize` push'ta boş) — elle `gh workflow run` verince çift derleme oluyor; yayın betiği en son başarılı run'ı alır, noterlikli olanı aldığını doğrula (iş akışı düzeltmesi önerildi, onay bekliyor), Actions token'ı Release oluşturamıyor (bu yüzden `scripts/publish-release.sh`); bu ağda GitHub API sık `connection reset` veriyor — betik tekrar çalıştırılabilir, `latest.json` CDN'de birkaç dakika eski kalabilir, doğrulamayı ondan yap.
 
 ## Yayın akışı
 

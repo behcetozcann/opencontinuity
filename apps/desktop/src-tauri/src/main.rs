@@ -157,7 +157,6 @@ fn main() {
                 diagnostics::write(warning);
             }
             app.manage(AppState { handle: Mutex::new(handle), view: Mutex::new(view) });
-            app.manage(updater::PendingUpdate::default());
             tray::create(app.handle())?;
             spawn_engine(app.handle().clone(), engine, events);
             updater::spawn_periodic_check(app.handle().clone());
